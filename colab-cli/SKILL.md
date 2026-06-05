@@ -35,10 +35,24 @@ colab update --install
 The package supports Linux and macOS. It is not currently a Windows-native CLI.
 The CLI stores session state under `~/.config/colab-cli/` by default.
 
+## Mental Model
+
+- A session is a live Jupyter kernel on a rented Colab VM. `colab new` allocates
+  compute; `colab stop` releases it.
+- Kernel state persists across `colab exec` and piped `colab repl` calls in the
+  same session. Imports, variables, and functions remain until
+  `colab restart-kernel` or `colab stop`.
+- Execution starts in `/content`. Prefer absolute `/content/...` paths for
+  remote files so later `ls`, `download`, and cleanup commands are unambiguous.
+- Each CLI command authenticates, performs one operation, and exits. The
+  keep-alive process is managed by the CLI after allocation.
+
 ## Agent Rules
 
 - Always make a lifecycle plan before allocating compute: session name, hardware,
   commands to run, artifacts to retrieve, and cleanup command.
+- Always use a session name with `-s <name>` for allocated sessions. Auto-named
+  sessions are harder to clean up and report on.
 - Prefer `colab run` for one-shot jobs because it provisions, executes, and stops
   the runtime automatically.
 - Use a named session for multi-step work: `colab new -s <name>`, then
@@ -48,11 +62,14 @@ The CLI stores session state under `~/.config/colab-cli/` by default.
 - Never start unpiped `colab repl` or `colab console` from a non-interactive
   agent shell. They are TTY-oriented. Use `colab exec`, `colab run`, or pipe
   stdin into the interactive command.
-- Treat `colab auth` and `colab drivemount` as user-interactive unless proven
-  otherwise in the current environment.
+- Treat unpiped `colab repl`, unpiped `colab console`, `colab auth`, and
+  `colab drivemount` as user-interactive. Piped `repl`/`console` can be used
+  non-interactively; `auth`/`drivemount` generally need a human at a terminal.
 - Do not edit `~/.config/colab-cli/sessions.json` by hand. Use CLI commands.
 - For live probes, remember that `colab new` and `colab run` can allocate real
   compute units. Clean up even after failed jobs.
+- For parallel agents or risky probes, isolate session state with
+  `--config /tmp/<name>.json`.
 
 ## Authentication
 
@@ -67,8 +84,9 @@ colab --auth adc sessions
 `oauth2` is the default in the installed CLI. First use may open a browser
 consent flow using the client config at `~/.colab-cli-oauth-config.json`.
 
-`adc` uses Google Application Default Credentials. If ADC user credentials fail
-with scope errors, re-authenticate with:
+`adc` uses Google Application Default Credentials and is usually better for
+headless agent workflows once configured. If ADC user credentials fail with scope
+errors, re-authenticate with:
 
 ```bash
 gcloud auth application-default login --scopes=openid,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/colaboratory
@@ -77,6 +95,16 @@ gcloud auth application-default login --scopes=openid,https://www.googleapis.com
 Do not confuse CLI control-plane auth with `colab auth`. The `colab auth`
 subcommand pushes credentials into the remote VM for notebook code that needs
 GCP services such as BigQuery or Cloud Storage.
+
+Debug control-plane identity and scopes with:
+
+```bash
+colab whoami
+colab --auth adc whoami
+```
+
+If `colab.pa.googleapis.com` returns 403, first check for a missing
+`colaboratory` scope with `colab whoami`. Do not retry allocations blindly.
 
 ## One-Shot Jobs
 
@@ -109,6 +137,16 @@ For executable scripts, a shebang can request Colab hardware:
 print("running remotely")
 ```
 
+Operational details:
+
+- `colab run` forwards script arguments and sets `__name__ == "__main__"` like
+  local `python script.py`.
+- Script exit codes propagate. An exception or `sys.exit(1)` makes `colab run`
+  return non-zero.
+- CLI status chatter goes to stderr; the script's stdout stays on stdout. This
+  makes `colab run job.py > out.txt` capture only the script output.
+- A missing script path fails before VM allocation.
+
 ## Multi-Step Sessions
 
 Use a named session for setup, multiple runs, file transfer, or log export:
@@ -133,6 +171,10 @@ Availability depends on the user's Colab subscription and remaining compute
 units. If a high-end GPU fails, retry with a cheaper option such as `T4` only
 after explaining the tradeoff.
 
+If an accelerator request returns a quota or entitlement error, fall back to
+`--gpu T4` or CPU only after checking the user's goal. Do not assume GPU/TPU
+allocation will succeed on every account.
+
 ## Execution
 
 Run local Python code on an existing session:
@@ -154,8 +196,20 @@ colab exec -s analysis -f notebook.ipynb --timeout 900
 colab log -s analysis -o analysis-log.ipynb
 ```
 
+Notebook execution writes an output notebook next to the input, and
+`colab log -o` can export the session history separately.
+
 For plots, pass `--output-image <path>` to `exec` or `repl` when you need a
 deterministic local image path.
+
+For batch shell commands, prefer Python through `exec` when possible. If a real
+shell is required:
+
+```bash
+printf '%s\n' "pwd; ls -la /content" | colab console -s analysis
+```
+
+`console` uses a terminal shell, so captured output can contain control bytes.
 
 ## Files And Environment
 
@@ -192,6 +246,7 @@ Inspect and save execution history:
 
 ```bash
 colab log -s analysis -n 20
+colab log -s analysis -t execution
 colab log -s analysis -o analysis-log.ipynb
 colab log -s analysis -o analysis-log.md
 colab log -s analysis -o analysis-log.jsonl
@@ -207,8 +262,9 @@ log file path if exported, and confirmation that cleanup ran.
 - Kernel stuck or timeout: run `colab restart-kernel -s <name>` once, then retry.
   If still stuck, stop and recreate the session.
 - Unexpected stale behavior: check `which colab` and `colab version`.
-- Auth failure: inspect whether the command used `oauth2` or `adc`; do not use
-  `colab auth` to fix control-plane credential problems.
+- Auth failure: inspect whether the command used `oauth2` or `adc`, then run
+  `colab whoami`; do not use `colab auth` to fix control-plane credential
+  problems.
 - Cleanup uncertainty: run `colab sessions` and stop any named sessions created
   for the current task.
 
@@ -221,12 +277,14 @@ colab status -s NAME
 colab run [--gpu GPU|--tpu TPU] [--keep] SCRIPT [ARGS...]
 colab exec -s NAME -f FILE [--timeout SECONDS]
 colab install -s NAME PKG...
+colab install -s NAME -r requirements.txt
 colab upload -s NAME LOCAL REMOTE
 colab download -s NAME REMOTE LOCAL
 colab log -s NAME [-n N|-o FILE]
 colab restart-kernel -s NAME
 colab url -s NAME [--open]
 colab stop -s NAME
+colab whoami
 colab version
 ```
 
