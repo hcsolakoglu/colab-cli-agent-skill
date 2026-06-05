@@ -48,6 +48,14 @@ cp -a colab-cli ~/.hermes/skills/data-science/colab-cli
 
 When installed, ask an agent to use `$colab-cli` for Colab runtime work.
 
+## Runtime safety
+
+The skill explicitly tells agents to stop Colab sessions they create and verify
+cleanup with `colab sessions`, so runtimes are not left consuming compute units.
+It also warns that runtime duration, idle timeout, accelerator access, and
+credit usage vary by Colab subscription tier, account state, demand, and
+hardware choice.
+
 ## Repository structure
 
 ```text

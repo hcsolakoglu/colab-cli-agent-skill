@@ -71,6 +71,23 @@ The CLI stores session state under `~/.config/colab-cli/` by default.
 - For parallel agents or risky probes, isolate session state with
   `--config /tmp/<name>.json`.
 
+## Runtime Cost And Duration Best Practices
+
+- Treat every allocated Colab session as potentially credit-consuming until it
+  is explicitly stopped.
+- End every workflow with `colab stop -s <name>` for sessions you created, then
+  run `colab sessions` to confirm there are no leftover active sessions.
+- Prefer `colab run` for one-shot work because it stops the runtime
+  automatically unless `--keep` is set.
+- Avoid `--keep` unless the user needs post-run inspection. If `--keep` is used,
+  report the session name and stop it as soon as inspection is finished.
+- Colab runtime availability, maximum lifetime, idle timeout, accelerator
+  access, and compute-unit consumption vary by account, subscription tier,
+  current demand, and hardware choice. Do not promise a fixed runtime duration.
+- For long jobs, write checkpoints and logs to retrievable paths such as
+  `/content/outputs` or Google Drive, and download/export artifacts before
+  cleanup.
+
 ## Authentication
 
 The global `--auth` option chooses how the CLI authenticates to the Colab control
