@@ -1,0 +1,7 @@
+interface:
+  display_name: "Colab CLI"
+  short_description: "Run work on Google Colab runtimes"
+  default_prompt: "Use $colab-cli to run this Python workload on an appropriate Google Colab runtime and clean up afterward."
+
+policy:
+  allow_implicit_invocation: true
