@@ -17,7 +17,7 @@ global locations for Codex, OpenCode, Hermes Agent, Claude Code, Cursor, Gemini
 CLI, and other supported coding agents in one command.
 
 ```bash
-npx skills add hcsolakoglu/colab-cli-agent-skill -g --agent '*' --skill colab-cli -y --copy
+npx skills add hcsolakoglu/colab-cli-agent-skill -g --agent '*' --skill colab-cli -y
 ```
 
 Check the global install:
@@ -25,6 +25,17 @@ Check the global install:
 ```bash
 npx skills list -g --json
 ```
+
+### Why no `--copy`?
+
+The Skills CLI defaults to symlinks, which keeps the skill as a single source
+of truth: one real copy under `~/.agents/skills/colab-cli/` and a symlink in
+every other supported agent's skills directory. Pass `--copy` only if you
+specifically need each agent to have an independent file copy (for example,
+to edit one agent's copy in isolation). The symlink mode is what avoids
+duplicate skill entries showing up in agents that auto-read both
+`~/.agents/skills/` and the agent's own `skills/` folder (Codex, Hermes, and
+several others fall into this category).
 
 ## Local development install
 
