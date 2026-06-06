@@ -68,9 +68,10 @@ credit usage vary by Colab subscription tier, account state, demand, and
 hardware choice.
 
 The package also includes `colab-cli/scripts/benchmark-runtime.py`, a compact
-VPS-style profiler for CPU/RAM/disk/GPU/TPU/network checks, plus a dated
-Pro+ snapshot under `colab-cli/references/`. The snapshot is intentionally marked
-as observed data, not a guaranteed hardware or credit-rate table.
+VPS-style profiler for CPU/RAM/disk/GPU/TPU/network checks and approximate
+FP32/FP16/BF16 matmul probes, plus a dated Pro+ snapshot under
+`colab-cli/references/`. The snapshot is intentionally marked as observed data,
+not a guaranteed hardware or credit-rate table.
 
 ## Repository structure
 

@@ -91,6 +91,12 @@ The CLI stores session state under `~/.config/colab-cli/` by default.
   credit consumption, use Colab's UI/resource panel or account page for the
   active runtime and record the observed rate in task notes. Do not hardcode old
   web/forum CU/hour tables as truth.
+- High-memory runtime selection exists in the Colab web UI, but
+  `google-colab-cli==0.5.9` does not expose a high-memory flag. The installed
+  CLI source defines assignment `Shape` for listed sessions, but `colab new` and
+  `colab run` only send `variant` plus `accelerator`; agents must not invent a
+  `--high-mem` flag. If high-memory CPU/T4/A100 is required, ask the user to
+  create it in the web UI or verify that a newer CLI release added shape support.
 
 ## Backend Inventory And Benchmarking
 
@@ -99,6 +105,10 @@ The installed CLI advertises these accelerator selectors:
 - CPU: omit `--gpu` and `--tpu`
 - GPU: `--gpu T4`, `--gpu L4`, `--gpu G4`, `--gpu H100`, `--gpu A100`
 - TPU: `--tpu v5e1`, `--tpu v6e1`
+
+Observed Colab web UI behavior on 2026-06-06: high-memory toggles were available
+for CPU-only, T4, and A100; L4 and TPU runtimes appeared to use their fixed
+higher-memory shapes. Treat this as a snapshot, not a contract.
 
 Availability is account-, region-, demand-, and subscription-dependent. A
 supported selector can still return `Service Unavailable` or fall back in the
@@ -116,9 +126,10 @@ colab run --session bench-t4 --gpu T4 --timeout 600 \
 ```
 
 The script records CPU model/core count, system RAM, disk size, disk read/write,
-NumPy RAM-copy speed, GPU/TPU indicators, `speedtest-cli` output, and cleanup-safe
-JSON. Read the dated Pro+ snapshot in `references/pro-plus-snapshot-2026-06-06.md`
-only as an example of what one account received at one point in time.
+NumPy RAM-copy speed, GPU/TPU indicators, approximate FP32/FP16/BF16 matmul
+throughput where supported, `speedtest-cli` output, and cleanup-safe JSON. Read
+the dated Pro+ snapshot in `references/pro-plus-snapshot-2026-06-06.md` only as
+an example of what one account received at one point in time.
 
 ## Authentication
 

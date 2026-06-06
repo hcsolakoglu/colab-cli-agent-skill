@@ -176,6 +176,62 @@ def gpu_info() -> dict:
     return {"nvidia_smi": nvidia_smi, "torch": torch_info}
 
 
+def gpu_compute_benchmark() -> dict:
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return {"available": False}
+        device = torch.device("cuda")
+        name = torch.cuda.get_device_name(0)
+        capability = torch.cuda.get_device_capability(0)
+        n = 4096
+        if "A100" in name or "H100" in name:
+            n = 8192
+        elif "L4" in name:
+            n = 6144
+        results = {
+            "available": True,
+            "device": name,
+            "cuda_capability": capability,
+            "matrix_n": n,
+            "note": "Approximate dense matmul throughput; task-specific kernels can differ.",
+        }
+        for label, dtype in (
+            ("fp32", torch.float32),
+            ("fp16", torch.float16),
+            ("bf16", torch.bfloat16),
+        ):
+            try:
+                a = torch.randn((n, n), device=device, dtype=dtype)
+                b = torch.randn((n, n), device=device, dtype=dtype)
+                for _ in range(2):
+                    _ = a @ b
+                torch.cuda.synchronize()
+                start = torch.cuda.Event(enable_timing=True)
+                end = torch.cuda.Event(enable_timing=True)
+                iterations = 5
+                start.record()
+                for _ in range(iterations):
+                    c = a @ b
+                end.record()
+                torch.cuda.synchronize()
+                seconds = start.elapsed_time(end) / 1000.0 / iterations
+                tflops = (2 * n**3) / seconds / 1e12
+                results[label] = {
+                    "seconds": round(seconds, 6),
+                    "tflops": round(tflops, 2),
+                    "output_sample": float(c.flatten()[0].detach().float().cpu()),
+                }
+                del a, b, c
+                torch.cuda.empty_cache()
+            except Exception as exc:  # noqa: BLE001
+                results[label] = {"error": repr(exc)}
+        return results
+    except Exception as exc:  # noqa: BLE001
+        return {"available": False, "error": repr(exc)}
+
+
 def tpu_info() -> dict:
     keys = [
         "COLAB_TPU_ADDR",
@@ -184,7 +240,117 @@ def tpu_info() -> dict:
         "TPU_WORKER_HOSTNAMES",
         "TPU_WORKER_PORTS",
     ]
-    return {"env": {key: os.environ.get(key) for key in keys if os.environ.get(key)}}
+    info = {"env": {key: os.environ.get(key) for key in keys if os.environ.get(key)}}
+    try:
+        import jax
+
+        devices = jax.devices()
+        info["jax"] = {
+            "version": jax.__version__,
+            "default_backend": jax.default_backend(),
+            "device_count": len(devices),
+            "devices": [
+                {
+                    "id": getattr(device, "id", None),
+                    "platform": getattr(device, "platform", None),
+                    "device_kind": getattr(device, "device_kind", None),
+                    "process_index": getattr(device, "process_index", None),
+                }
+                for device in devices
+            ],
+        }
+        memory_stats = {}
+        for i, device in enumerate(devices[:1]):
+            try:
+                memory_stats[f"device_{i}"] = device.memory_stats()
+            except Exception as exc:  # noqa: BLE001
+                memory_stats[f"device_{i}"] = {"error": repr(exc)}
+        info["jax"]["memory_stats"] = memory_stats
+    except Exception as exc:  # noqa: BLE001
+        info["jax"] = {"error": repr(exc)}
+    try:
+        import tensorflow as tf
+
+        info["tensorflow"] = {
+            "version": tf.__version__,
+            "logical_tpu_devices": [str(d) for d in tf.config.list_logical_devices("TPU")],
+            "physical_tpu_devices": [str(d) for d in tf.config.list_physical_devices("TPU")],
+        }
+    except Exception as exc:  # noqa: BLE001
+        info["tensorflow"] = {"error": repr(exc)}
+    return info
+
+
+def tpu_compute_benchmark() -> dict:
+    try:
+        import jax
+        import jax.numpy as jnp
+
+        if jax.default_backend() != "tpu":
+            return {"available": False, "backend": jax.default_backend()}
+        n = 4096
+        results = {
+            "available": True,
+            "backend": jax.default_backend(),
+            "matrix_n": n,
+            "note": "Approximate single-host dense matmul throughput; topology and framework kernels can differ.",
+        }
+
+        def bench(dtype) -> dict:
+            key = jax.random.PRNGKey(0)
+            a = jax.random.normal(key, (n, n), dtype=dtype)
+            b = jax.random.normal(key, (n, n), dtype=dtype)
+            fn = jax.jit(lambda x, y: x @ y)
+            fn(a, b).block_until_ready()
+            iterations = 5
+            start = time.perf_counter()
+            out = None
+            for _ in range(iterations):
+                out = fn(a, b)
+                out.block_until_ready()
+            seconds = (time.perf_counter() - start) / iterations
+            tflops = (2 * n**3) / seconds / 1e12
+            return {
+                "seconds": round(seconds, 6),
+                "tflops": round(tflops, 2),
+                "output_sample": float(out.reshape(-1)[0]),
+            }
+
+        for label, dtype in (
+            ("fp32", jnp.float32),
+            ("bf16", jnp.bfloat16),
+            ("fp16", jnp.float16),
+        ):
+            try:
+                results[label] = bench(dtype)
+            except Exception as exc:  # noqa: BLE001
+                results[label] = {"error": repr(exc)}
+        return results
+    except Exception as exc:  # noqa: BLE001
+        return {"available": False, "error": repr(exc)}
+
+
+def cpu_compute_benchmark() -> dict:
+    try:
+        import numpy as np
+
+        n = 2048
+        a = np.random.randn(n, n).astype("float32")
+        b = np.random.randn(n, n).astype("float32")
+        start = time.perf_counter()
+        c = a @ b
+        seconds = time.perf_counter() - start
+        tflops = (2 * n**3) / seconds / 1e12
+        return {
+            "matrix_n": n,
+            "fp32": {
+                "seconds": round(seconds, 6),
+                "tflops": round(tflops, 3),
+                "output_sample": float(c.reshape(-1)[0]),
+            },
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"error": repr(exc)}
 
 
 def network_speed() -> dict:
@@ -230,7 +396,10 @@ def main() -> None:
         "disk_speed": disk_speed(),
         "ram_speed": ram_speed(),
         "gpu": gpu_info(),
+        "gpu_compute": gpu_compute_benchmark(),
         "tpu": tpu_info(),
+        "tpu_compute": tpu_compute_benchmark(),
+        "cpu_compute": cpu_compute_benchmark(),
         "network": network_speed(),
     }
     print(json.dumps(output, indent=2, sort_keys=True))
