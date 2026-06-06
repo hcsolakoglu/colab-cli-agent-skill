@@ -131,6 +131,17 @@ throughput where supported, `speedtest-cli` output, and cleanup-safe JSON. Read
 the dated Pro+ snapshot in `references/pro-plus-snapshot-2026-06-06.md` only as
 an example of what one account received at one point in time.
 
+For scarce GPUs, do not conclude unavailability from one failed allocation. Use
+the repo-level retry helper when the user explicitly wants persistence:
+
+```bash
+ATTEMPTS=80 SLEEP_SECONDS=20 scripts/retry-gpu-benchmarks.sh G4 A100 H100
+```
+
+This retries named `colab run` sessions, validates JSON output, and checks
+sessions between attempts. It can consume compute units when allocation
+succeeds, so use it only with user approval.
+
 ## Authentication
 
 The global `--auth` option chooses how the CLI authenticates to the Colab control

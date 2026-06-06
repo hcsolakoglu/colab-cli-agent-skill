@@ -73,6 +73,10 @@ FP32/FP16/BF16 matmul probes, plus a dated Pro+ snapshot under
 `colab-cli/references/`. The snapshot is intentionally marked as observed data,
 not a guaranteed hardware or credit-rate table.
 
+For scarce GPUs, `scripts/retry-gpu-benchmarks.sh` repeatedly tries named
+`colab run` allocations, validates benchmark JSON, and checks for leftover
+sessions between attempts.
+
 ## Repository structure
 
 ```text
@@ -84,6 +88,7 @@ colab-cli/
   references/pro-plus-snapshot-2026-06-06.md
 scripts/
   install-local.sh
+  retry-gpu-benchmarks.sh
 ```
 
 The root repo intentionally stays small. `colab-cli/` is the actual portable

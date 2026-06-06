@@ -35,13 +35,14 @@ from Colab, or first verify that a newer CLI release added shape support.
 | Selector | Allocation result | CPU | vCPU | RAM GiB | Disk GB | Disk write MB/s | Disk read MB/s | RAM copy GB/s | Accelerator / HBM | Speedtest down/up Mbps | Ping ms |
 |---|---:|---|---:|---:|---:|---:|---:|---:|---|---:|---:|
 | CPU | allocated | Intel Xeon @ 2.20GHz | 2 | 12.7 | 225.83 | 158.39 | 5218.17 | 2.17 | none | 1643.9 / 453.5 | 32.9 |
-| T4 | allocated | Intel Xeon @ 2.00GHz | 2 | 12.7 | 235.68 | 162.20 | 6033.75 | 2.60 | Tesla T4, 15360 MiB | 2709.6 / 534.3 | 13.9 |
-| L4 | allocated | Intel Xeon @ 2.20GHz | 12 | 53.0 | 235.68 | 265.92 | 6615.97 | 2.74 | NVIDIA L4, 23034 MiB | 2632.4 / 923.7 | 3.2 |
-| A100 | user observed via web UI | - | - | high-memory | - | - | - | - | NVIDIA A100-SXM4-80GB, 81920 MiB | - | - |
+| T4 | allocated | Intel Xeon @ 2.00GHz | 2 | 12.7 | 235.68 | 237.10 | 6582.86 | 2.72 | Tesla T4, 15360 MiB | 2951.8 / 799.2 | 13.4 |
+| L4 | allocated | Intel Xeon @ 2.20GHz | 12 | 53.0 | 235.68 | 263.09 | 6372.52 | 2.73 | NVIDIA L4, 23034 MiB | 2733.0 / 940.3 | 3.2 |
+| G4 | allocated on attempt 7 | AMD EPYC 9B45 | 48 | 176.9 | 235.68 | 295.45 | 28640.56 | 11.93 | NVIDIA RTX PRO 6000 Blackwell Server Edition, 97887 MiB | 1376.8 / 317.0 | 42.5 |
+| A100 | allocated on attempt 6 | Intel Xeon @ 2.20GHz | 12 | 83.5 | 235.68 | 264.74 | 6712.55 | 2.77 | NVIDIA A100-SXM4-40GB, 40960 MiB | speedtest unavailable | - |
+| A100 high-memory | user observed via web UI | - | - | high-memory | - | - | - | - | NVIDIA A100-SXM4-80GB, 81920 MiB | - | - |
 | TPU v5e1 | allocated | AMD EPYC 7B13 | 24 | 47.0 | 225.33 | 112.12 | 15499.22 | 8.19 | TPU v5 lite, ~16.9 GB HBM limit | 622.7 / 215.2 | 39.6 |
 | TPU v6e1 | allocated | AMD EPYC 9B14 | 44 | 172.9 | 225.33 | 409.06 | 17111.27 | 7.70 | TPU v6 lite, ~33.6 GB HBM limit | 769.9 / 187.8 | 40.9 |
-| G4 | unavailable | - | - | - | - | - | - | - | request returned Service Unavailable | - | - |
-| H100 | unavailable | - | - | - | - | - | - | - | request returned Service Unavailable | - | - |
+| H100 | stopped after 41 failed attempts | - | - | - | - | - | - | - | not allocated through CLI during retry run | - | - |
 
 ## Approximate Compute Throughput
 
@@ -51,11 +52,14 @@ not full hardware benchmarks and should be used only for rough comparison.
 | Selector | FP32 TFLOPS | FP16 TFLOPS | BF16 TFLOPS | Notes |
 |---|---:|---:|---:|---|
 | CPU standard | 0.067 | - | - | NumPy FP32 matmul, 2048x2048 |
+| T4 | 3.40 | 49.59 | 2.36 | PyTorch matmul, 4096x4096, CUDA capability 7.5 |
+| L4 | 12.64 | 83.57 | 85.37 | PyTorch matmul, 6144x6144, CUDA capability 8.9 |
+| G4 | 73.85 | 290.06 | 372.87 | PyTorch matmul, 4096x4096, CUDA capability 12.0 |
+| A100-SXM4-40GB | 19.03 | 293.05 | 295.24 | PyTorch matmul, 8192x8192, CUDA capability 8.0 |
 | TPU v5e1 | 140.09 | 144.17 | 149.02 | JAX matmul, 4096x4096, device kind `TPU v5 lite` |
 | TPU v6e1 | 381.40 | 359.72 | 383.21 | JAX matmul, 4096x4096, device kind `TPU v6 lite` |
-| T4 | not measured with compute script | not measured | not measured | rerun benchmark when available |
-| L4 | not measured with compute script | not measured | not measured | rerun benchmark when available |
 | A100-SXM4-80GB | not measured with compute script | not measured | not measured | user observed allocation via web UI |
+| H100 | not measured | not measured | not measured | stopped after 41 failed CLI allocation attempts |
 
 ## Compute-Unit Rate Handling And Observed Rates
 
@@ -73,6 +77,17 @@ Colab UI by the user on 2026-06-06:
 | TPU v5e-1 | ~2.92 |
 | TPU v6e-1 | ~4.08 |
 | A100-SXM4-80GB high-memory | ~6.77 |
+
+Additional community reports found on 2026-06-06 conflicted with each other:
+
+- H100 80GB was reported around ~18.05 CU/hour in a December 2025 Reddit
+  thread, and users in the same thread reported frequent fallback/unavailability.
+- G4 / RTX PRO 6000 Blackwell Server Edition was reported around ~6.71 CU/hour
+  in a February 2026 Reddit thread.
+- A100 40GB was reported around ~5.37 CU/hour in a December 2025 Reddit thread.
+- Some newer comments claimed the most expensive Colab GPUs were closer to
+  ~7 CU/hour. Because these are community reports and Colab rates can change,
+  prefer the active runtime's UI value over any cached table.
 
 For a live job, inspect the Colab UI resource/account panel for the active
 runtime's current CU/hour value and record that task-local value before long
