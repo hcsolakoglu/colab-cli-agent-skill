@@ -142,6 +142,18 @@ This retries named `colab run` sessions, validates JSON output, and checks
 sessions between attempts. It can consume compute units when allocation
 succeeds, so use it only with user approval.
 
+If the user interrupts a retry or benchmark run, immediately check for local
+wrapper and `colab run` processes, stop the current named session if one exists,
+and run `colab sessions`:
+
+```bash
+pgrep -a -f 'retry-gpu-benchmarks|colab run --session'
+colab stop -s <current-session-name>
+colab sessions
+```
+
+An interrupted shell does not prove the remote assignment was released.
+
 ## Authentication
 
 The global `--auth` option chooses how the CLI authenticates to the Colab control
