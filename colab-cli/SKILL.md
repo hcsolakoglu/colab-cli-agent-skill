@@ -87,6 +87,38 @@ The CLI stores session state under `~/.config/colab-cli/` by default.
 - For long jobs, write checkpoints and logs to retrievable paths such as
   `/content/outputs` or Google Drive, and download/export artifacts before
   cleanup.
+- The Colab CLI does not currently expose a reliable CU/hour value. For hourly
+  credit consumption, use Colab's UI/resource panel or account page for the
+  active runtime and record the observed rate in task notes. Do not hardcode old
+  web/forum CU/hour tables as truth.
+
+## Backend Inventory And Benchmarking
+
+The installed CLI advertises these accelerator selectors:
+
+- CPU: omit `--gpu` and `--tpu`
+- GPU: `--gpu T4`, `--gpu L4`, `--gpu G4`, `--gpu H100`, `--gpu A100`
+- TPU: `--tpu v5e1`, `--tpu v6e1`
+
+Availability is account-, region-, demand-, and subscription-dependent. A
+supported selector can still return `Service Unavailable` or fall back in the
+web UI. Always inspect the actual assigned hardware with `nvidia-smi`, CPU/RAM
+checks, and task-specific benchmarks.
+
+For a compact VPS-style profile, run the bundled benchmark script:
+
+```bash
+colab run --session bench-cpu --timeout 600 \
+  colab-cli/scripts/benchmark-runtime.py cpu > cpu.json
+
+colab run --session bench-t4 --gpu T4 --timeout 600 \
+  colab-cli/scripts/benchmark-runtime.py T4 > T4.json
+```
+
+The script records CPU model/core count, system RAM, disk size, disk read/write,
+NumPy RAM-copy speed, GPU/TPU indicators, `speedtest-cli` output, and cleanup-safe
+JSON. Read the dated Pro+ snapshot in `references/pro-plus-snapshot-2026-06-06.md`
+only as an example of what one account received at one point in time.
 
 ## Authentication
 

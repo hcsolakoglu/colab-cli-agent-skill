@@ -8,6 +8,8 @@ Use these primary sources when behavior may have changed:
   `https://github.com/googlecolab/google-colab-cli`
 - Bundled upstream agent skill:
   `https://github.com/googlecolab/google-colab-cli/blob/main/COLAB_SKILL.md`
+- Google Colab FAQ for resource limits, runtime duration, and paid-plan caveats:
+  `https://research.google.com/colaboratory/faq.html`
 
 Primary install command:
 

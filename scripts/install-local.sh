@@ -9,6 +9,8 @@ install_copy() {
   mkdir -p "$(dirname "$dest")"
   rm -rf "$dest"
   cp -a "$SKILL_SRC" "$dest"
+  find "$dest" -type d -name __pycache__ -prune -exec rm -rf {} +
+  find "$dest" -type f -name '*.pyc' -delete
 }
 
 install_copy "${CODEX_HOME:-$HOME/.codex}/skills/colab-cli"

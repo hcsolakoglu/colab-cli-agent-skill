@@ -67,13 +67,20 @@ It also warns that runtime duration, idle timeout, accelerator access, and
 credit usage vary by Colab subscription tier, account state, demand, and
 hardware choice.
 
+The package also includes `colab-cli/scripts/benchmark-runtime.py`, a compact
+VPS-style profiler for CPU/RAM/disk/GPU/TPU/network checks, plus a dated
+Pro+ snapshot under `colab-cli/references/`. The snapshot is intentionally marked
+as observed data, not a guaranteed hardware or credit-rate table.
+
 ## Repository structure
 
 ```text
 colab-cli/
   SKILL.md
   agents/openai.yaml
+  scripts/benchmark-runtime.py
   references/official-sources.md
+  references/pro-plus-snapshot-2026-06-06.md
 scripts/
   install-local.sh
 ```
