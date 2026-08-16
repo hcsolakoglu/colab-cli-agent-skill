@@ -10,6 +10,8 @@ Use these primary sources when behavior may have changed:
   `https://github.com/googlecolab/google-colab-cli/blob/main/COLAB_SKILL.md`
 - Google Colab FAQ for resource limits, runtime duration, and paid-plan caveats:
   `https://research.google.com/colaboratory/faq.html`
+- PyPI release history for `google-colab-cli` (watch for new versions):
+  `https://pypi.org/project/google-colab-cli/#history`
 
 Primary install command:
 

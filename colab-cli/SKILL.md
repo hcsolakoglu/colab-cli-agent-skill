@@ -35,6 +35,12 @@ colab update --install
 The package supports Linux and macOS. It is not currently a Windows-native CLI.
 The CLI stores session state under `~/.config/colab-cli/` by default.
 
+The CLI bundles its own operator guide and README, printable with `colab skill`
+and `colab readme`. Treat them as upstream context that can lag the installed
+release (they claim `--auth` defaults to `adc`, while `google-colab-cli==0.6.0`
+defaults to `oauth2`); when they disagree, trust `colab --help` and
+`colab <command> --help` from the installed binary.
+
 ## Mental Model
 
 - A session is a live Jupyter kernel on a rented Colab VM. `colab new` allocates
@@ -91,12 +97,16 @@ The CLI stores session state under `~/.config/colab-cli/` by default.
   credit consumption, use Colab's UI/resource panel or account page for the
   active runtime and record the observed rate in task notes. Do not hardcode old
   web/forum CU/hour tables as truth.
+- When the account runs out of compute units, `colab pay` opens the Colab
+  subscription page to top up. It launches a browser, so treat it as
+  user-interactive and suggest it rather than running it blindly.
 - High-memory runtime selection exists in the Colab web UI, but
-  `google-colab-cli==0.5.9` does not expose a high-memory flag. The installed
-  CLI source defines assignment `Shape` for listed sessions, but `colab new` and
-  `colab run` only send `variant` plus `accelerator`; agents must not invent a
-  `--high-mem` flag. If high-memory CPU/T4/A100 is required, ask the user to
-  create it in the web UI or verify that a newer CLI release added shape support.
+  `google-colab-cli==0.6.0` (verified 2026-08-17) still does not expose a
+  high-memory flag. The installed CLI source defines assignment `Shape` for
+  listed sessions, but `colab new` and `colab run` only send `variant` plus
+  `accelerator`; agents must not invent a `--high-mem` flag. If high-memory
+  CPU/T4/A100 is required, ask the user to create it in the web UI, or run
+  `colab update` to check whether a newer CLI release added shape support.
 
 ## Backend Inventory And Benchmarking
 
@@ -228,6 +238,12 @@ Operational details:
   return non-zero.
 - CLI status chatter goes to stderr; the script's stdout stays on stdout. This
   makes `colab run job.py > out.txt` capture only the script output.
+- Exception: the CLI prints a once-daily upgrade banner
+  (`[colab] A new version ...`) to stdout before command output on
+  non-display subcommands, including `run`, `exec`, `new`, and `sessions`.
+  When parsing captured stdout, ignore leading `[colab]`-prefixed lines, or
+  silence the check with `"enable_update_check": false` in
+  `~/.config/colab-cli/settings.json`.
 - A missing script path fails before VM allocation.
 
 ## Multi-Step Sessions
@@ -256,7 +272,9 @@ after explaining the tradeoff.
 
 If an accelerator request returns a quota or entitlement error, fall back to
 `--gpu T4` or CPU only after checking the user's goal. Do not assume GPU/TPU
-allocation will succeed on every account.
+allocation will succeed on every account. If the error indicates exhausted
+compute units or an expired subscription, suggest `colab pay`, which opens the
+Colab subscription page in a browser.
 
 ## Execution
 
@@ -332,8 +350,11 @@ colab log -s analysis -n 20
 colab log -s analysis -t execution
 colab log -s analysis -o analysis-log.ipynb
 colab log -s analysis -o analysis-log.md
+colab log -s analysis -o analysis-log.txt
 colab log -s analysis -o analysis-log.jsonl
 ```
+
+The `-o` suffix picks the export format: `.ipynb`, `.md`, `.txt`, or `.jsonl`.
 
 When reporting completion, include the session name, hardware, files retrieved,
 log file path if exported, and confirmation that cleanup ran.
@@ -365,8 +386,10 @@ colab upload -s NAME LOCAL REMOTE
 colab download -s NAME REMOTE LOCAL
 colab log -s NAME [-n N|-o FILE]
 colab restart-kernel -s NAME
-colab url -s NAME [--open]
+colab url -s NAME [--open] [--host HOST]
 colab stop -s NAME
+colab pay
+colab skill
 colab whoami
 colab version
 ```
