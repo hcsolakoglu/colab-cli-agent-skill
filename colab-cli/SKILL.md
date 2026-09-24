@@ -56,24 +56,37 @@ Two declared dependency floors in `google-colab-cli==0.7.2` are wrong and
 produce a broken install straight from PyPI:
 
 - `jupyter-kernel-client==0.8` is pinned, but 0.7.2's execution path imports
-  `JupyterSubprotocol`, which only exists in `>=0.9.0`. Result: `colab exec`
-  fails with an `AttributeError`. Fix in the same environment the `colab`
-  binary runs in:
+  `JupyterSubprotocol`, which only exists in the published PyPI
+  `jupyter-kernel-client>=0.9.0`. (Version string alone is not a reliable
+  signal: Google's internal source override also reports `0.8.0` while
+  shipping the API. The breakage is specific to the PyPI 0.8.0 wheel.)
+  Result: `colab exec` fails with an `AttributeError`. Fix in the same
+  environment the `colab` binary runs in — plain `pip install` targets the
+  wrong environment for the common install methods:
   ```bash
-  pip install "jupyter-kernel-client>=0.9,<1"
+  # uv tool install (default): the CLI lives in an isolated venv that has no
+  # pip; plain `pip` does NOT touch it.
+  uv pip install --python ~/.local/share/uv/tools/google-colab-cli/bin/python \
+    "jupyter-kernel-client>=0.9,<1" "websocket-client>=1.6"
+  # pipx: pipx inject google-colab-cli "jupyter-kernel-client>=0.9,<1" "websocket-client>=1.6"
+  # plain pip / activated venv: pip install "jupyter-kernel-client>=0.9,<1" "websocket-client>=1.6"
   ```
-  Stay below 1.x: client-class compatibility for 1.x is still unresolved
-  upstream. Upstream issue: `googlecolab/google-colab-cli#137`.
+  Stay below 1.x: 1.x is not uniformly compatible with the current
+  client-class lookup (`KernelClient` vs `ColabKernelClient`), so `>=0.9,<1`
+  is the conservative workaround. Upstream issue:
+  `googlecolab/google-colab-cli#137`. Note the `>=0.8` floor proposed in
+  `googlecolab/google-colab-cli#138` is insufficient: a stock PyPI 0.8.0
+  install already satisfies it while still missing the API.
 - `websocket-client>=1.0` is declared, but on 1.0 `colab ssh` loses the
-  server's 400 response body. Use `>=1.6`:
-  ```bash
-  pip install "websocket-client>=1.6"
-  ```
+  server's 400 response body (the `resp_body` parameter on
+  `WebSocketBadStatusException` only exists since 1.6.0). Use `>=1.6` —
+  covered by the install command above.
   Upstream issue: `googlecolab/google-colab-cli#139`.
 
-Verify after installing: `colab version`, then
-`python -c "from jupyter_kernel_client import JupyterSubprotocol"` in the
-CLI's environment must succeed.
+Verify after installing: `colab version`, then run the import check with the
+CLI's own interpreter (e.g.
+`~/.local/share/uv/tools/google-colab-cli/bin/python -c "from jupyter_kernel_client import JupyterSubprotocol"`)
+— it must succeed.
 
 ## Mental Model
 
