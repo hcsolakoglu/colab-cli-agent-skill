@@ -29,12 +29,12 @@ driver 580.82.07.
 | L4 | `--gpu L4` | 1.54 | NVIDIA L4 | 22.5G | Intel Xeon @ 2.20GHz | 2200 | 12 | 53G | 236G |
 | L4 | `--gpu L4 --high-mem` | 1.54 | NVIDIA L4 | 22.5G | (same) | 2200 | 12 | 53G | 236G |
 | G4 | `--gpu G4` | 8.90 | RTX PRO 6000 Blackwell SE | 96G | AMD EPYC 9B45 | 2700-4150 boost | 48 | 185G | 236G |
-| G4 | `--gpu G4 --high-mem` | n/a | backend rejected the high-RAM shape (quota/entitlement) |
+| G4 | `--gpu G4 --high-mem` | n/a | no high-RAM G4 shape exists; backend rejects shape=hm deliberately |
 | A100 | `--gpu A100` | 5.30 | A100-SXM4-**40GB** | 40G | Intel Xeon @ 2.20GHz | 2200 | 12 | 87G | 236G |
 | A100 | `--gpu A100 --high-mem` | 6.77 | A100-SXM4-**80GB** | 80G | Intel Xeon @ 2.20GHz | 2200 | 12 | 175G | 236G |
-| H100 | `--gpu H100` | n/a | assign -> 503 Service Unavailable (2 attempts); no entitlement/capacity on this account |
-| TPU v5e1 | `--tpu v5e1` | 2.92 | TPU v5 lite x1 (jax) | - | AMD EPYC 7B13 | 2450 | 24 | 49G | 226G |
-| TPU v6e1 | `--tpu v6e1` | 4.08 | TPU v6 lite x1 (jax) | - | AMD EPYC 9B14 | 2600 | 44 | 172G | 226G |
+| H100 | `--gpu H100` | n/a | 503 Service Unavailable on 3 attempts; in Pro+ catalog but effectively unallocatable on this account |
+| TPU v5e1 | `--tpu v5e1` (+ `--high-mem`: n/a, single shape) | 2.92 | TPU v5 lite x1 (jax) | - | AMD EPYC 7B13 | 2450 | 24 | 49G | 226G |
+| TPU v6e1 | `--tpu v6e1` (+ `--high-mem`: n/a, single shape) | 4.08 | TPU v6 lite x1 (jax) | - | AMD EPYC 9B14 | 2600 | 44 | 172G | 226G |
 
 Hours per 100 CU: CPU 1250, CPU-hm 385, T4 93, T4-hm 79, L4 65, G4 11,
 A100 19, A100-hm 15, v5e1 34, v6e1 25.
@@ -44,9 +44,17 @@ A100 19, A100-hm 15, v5e1 34, v6e1 25.
 - A100 standard provisions the **40GB** variant; `--high-mem` provisions the
   **80GB** variant. Colab auto-selects the variant; the 5.30 rate was measured
   on 40GB.
-- `--high-mem` is ignored for single-shape accelerators (L4, TPU v5e1/v6e1):
-  identical rate confirms it.
-- G4 (RTX PRO 6000 Blackwell SE, 96GB VRAM, 48 vCPU) priced above A100-40GB
-  on this account/tier.
+- L4, TPU v5e1, and TPU v6e1 exist in a **single machine shape only**
+  (`HIGH_MEM_ONLY_ACCELERATORS` in google-colab-cli 0.7.2 source): the CLI
+  drops `--high-mem` client-side with a warning, so there is no separate
+  high-mem combination for them.
+- G4 high-mem: no high-RAM G4 shape exists at all. The backend rejects it
+  deliberately ("Backend rejected accelerator 'G4'. You may not have quota or
+  entitlement for this accelerator on your account."); the standard G4 VM is
+  already 185GB RAM / 48 vCPU.
+- H100: exists in the Pro+ catalog (third-party refs list it ~18 CU/hr) but
+  the assign endpoint returns 503 Service Unavailable. Three failed attempts
+  on 2026-09-24; 41 failed attempts were also recorded on 2026-06-06 on this
+  account. Capacity/entitlement scarcity, effectively persistent here.
 - TPU `new` can hit the CLI's 120s read timeout while the assignment still
   materializes server-side, leaving an orphan that burns CU until unassigned.
