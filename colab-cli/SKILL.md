@@ -444,6 +444,7 @@ colab usage
 colab help [COMMAND]
 colab pay
 colab skill
+colab readme
 colab whoami
 colab version
 ```
