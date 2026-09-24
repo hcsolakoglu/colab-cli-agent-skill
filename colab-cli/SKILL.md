@@ -72,6 +72,9 @@ although the implementation also supports macOS).
   the runtime automatically.
 - Use a named session for multi-step work: `colab new -s <name>`, then
   `colab install`, `colab exec`, `colab download`, `colab log`, `colab stop`.
+- `colab run -s <name>` does not attach to an existing session: `-s` only labels
+  the fresh ephemeral VM that `run` provisions and releases. To execute code on
+  an existing session, use `colab exec -s <name>`.
 - Do not leave paid resources running. Run `colab stop -s <name>` when done, then
   verify with `colab sessions`.
 - Never start unpiped `colab repl` or `colab console` from a non-interactive
@@ -107,7 +110,9 @@ although the implementation also supports macOS).
   assignment count. Treat the numbers as point-in-time account data, not a
   guaranteed rate table; availability, maximum lifetime, idle timeout, and
   accelerator access still vary by tier, demand, and hardware. Do not hardcode
-  old web/forum CU/hour tables as truth.
+  old web/forum CU/hour tables as truth. A dated measured snapshot lives at
+  `references/cu-rate-card-2026-09-24.md` (rates + provisioned hardware per
+  backend, account/region-specific).
 - When the account runs out of compute units, `colab pay` opens the Colab
   subscription page to top up. It launches a browser, so treat it as
   user-interactive and suggest it rather than running it blindly.
