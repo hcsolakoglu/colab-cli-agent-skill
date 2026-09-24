@@ -50,6 +50,31 @@ surface and defaults, but inspect installed source when behavior matters; 0.7.2
 itself has at least one stale help string (`update --install` says Linux-only
 although the implementation also supports macOS).
 
+### 0.7.2 packaging regressions (workarounds)
+
+Two declared dependency floors in `google-colab-cli==0.7.2` are wrong and
+produce a broken install straight from PyPI:
+
+- `jupyter-kernel-client==0.8` is pinned, but 0.7.2's execution path imports
+  `JupyterSubprotocol`, which only exists in `>=0.9.0`. Result: `colab exec`
+  fails with an `AttributeError`. Fix in the same environment the `colab`
+  binary runs in:
+  ```bash
+  pip install "jupyter-kernel-client>=0.9,<1"
+  ```
+  Stay below 1.x: client-class compatibility for 1.x is still unresolved
+  upstream. Upstream issue: `googlecolab/google-colab-cli#137`.
+- `websocket-client>=1.0` is declared, but on 1.0 `colab ssh` loses the
+  server's 400 response body. Use `>=1.6`:
+  ```bash
+  pip install "websocket-client>=1.6"
+  ```
+  Upstream issue: `googlecolab/google-colab-cli#139`.
+
+Verify after installing: `colab version`, then
+`python -c "from jupyter_kernel_client import JupyterSubprotocol"` in the
+CLI's environment must succeed.
+
 ## Mental Model
 
 - A session is a live Jupyter kernel on a rented Colab VM. `colab new` allocates
