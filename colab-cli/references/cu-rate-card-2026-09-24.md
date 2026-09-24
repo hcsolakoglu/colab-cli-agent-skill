@@ -1,11 +1,12 @@
 # Compute-Unit Rate Card - 2026-09-24
 
 Dated snapshot of measured Colab compute-unit (CU) consumption per backend.
-Account/region/tier-specific: measured on a pay-as-you-go CU account
-(`cansolakoglu130@gmail.com` via gcloud ADC) in region `asia-east1` with
-`google-colab-cli` 0.7.2. Rates and provisioned hardware vary by region,
-demand, tier, and over time. Do not hardcode these as universal truth;
-re-measure with `colab usage` for current numbers.
+Account/region/tier-specific: measured on a pay-as-you-go CU account in
+region `asia-east1` with `google-colab-cli` 0.7.2. Rates and provisioned
+hardware vary by region, demand, tier, and over time. Do not hardcode these
+as universal truth; re-measure with `colab usage` for current numbers.
+Raw measurement artifacts (rates.json, per-backend hardware inventories)
+are not committed to this repo; this document is the derived snapshot.
 
 ## Method
 
@@ -29,7 +30,7 @@ the sweep + inventory: 0.29 CU.
 | L4 | `--gpu L4` | 1.54 | NVIDIA L4 | 22.5G | Intel Xeon @ 2.20GHz | 2200 | 12 | 53G | 236G |
 | L4 | `--gpu L4 --high-mem` | 1.54 | NVIDIA L4 | 22.5G | (same) | 2200 | 12 | 53G | 236G |
 | G4 | `--gpu G4` | 8.90 | RTX PRO 6000 Blackwell SE | 96G | AMD EPYC 9B45 | 2700-4150 boost | 48 | 185G | 236G |
-| G4 | `--gpu G4 --high-mem` | n/a | no high-RAM G4 shape exists; backend rejects shape=hm deliberately |
+| G4 | `--gpu G4 --high-mem` | n/a | `--high-mem` rejected on this account during the 2026-09-24 measurement; no separate G4 high-memory rate measured |
 | A100 | `--gpu A100` | 5.30 | A100-SXM4-**40GB** | 40G | Intel Xeon @ 2.20GHz | 2200 | 12 | 87G | 236G |
 | A100 | `--gpu A100 --high-mem` | 6.77 | A100-SXM4-**80GB** | 80G | Intel Xeon @ 2.20GHz | 2200 | 12 | 175G | 236G |
 | H100 | `--gpu H100` | n/a | 503 Service Unavailable on 3 attempts; in Pro+ catalog but effectively unallocatable on this account |
@@ -50,13 +51,16 @@ A100 19, A100-hm 15, v5e1 34, v6e1 25.
   (`HIGH_MEM_ONLY_ACCELERATORS` in google-colab-cli 0.7.2 source): the CLI
   drops `--high-mem` client-side with a warning, so there is no separate
   high-mem combination for them.
-- G4 high-mem: no high-RAM G4 shape exists at all. The backend rejects it
-  deliberately ("Backend rejected accelerator 'G4'. You may not have quota or
-  entitlement for this accelerator on your account."); the standard G4 VM is
-  already 185GB RAM / 48 vCPU.
+- G4 high-mem: `--gpu G4 --high-mem` was rejected on this account during
+  the 2026-09-24 measurement ("Backend rejected accelerator 'G4'. You may not
+  have quota or entitlement for this accelerator on your account."). That
+  error does not distinguish "no such shape exists" from missing entitlement
+  or capacity, so no separate G4 high-memory rate was measured. Note the
+  standard G4 VM is already 185GB RAM / 48 vCPU.
 - H100: exists in the Pro+ catalog (third-party refs list it ~18 CU/hr) but
   the assign endpoint returns 503 Service Unavailable. Three failed attempts
   on 2026-09-24; 41 failed attempts were also recorded on 2026-06-06 on this
-  account. Capacity/entitlement scarcity, effectively persistent here.
+  account. Persistently unavailable in these observations; whether due to
+  capacity, entitlement, or another backend condition was not established.
 - TPU `new` can hit the CLI's 120s read timeout while the assignment still
   materializes server-side, leaving an orphan that burns CU until unassigned.
