@@ -26,27 +26,9 @@ If missing, install it with `uv`:
 uv tool install google-colab-cli
 ```
 
-### Known 0.7.2 release hazards
+### Additional 0.7.2 local security hazards
 
-`google-colab-cli==0.7.2` has a released dependency regression: its wheel
-requires PyPI `jupyter-kernel-client==0.8`, but `runtime.py` uses
-`JupyterSubprotocol`, which PyPI 0.8.0 does not provide. A stock 0.7.2 install
-therefore fails when a command first needs the kernel client (for example,
-`colab exec`). Until upstream ships a corrected release, install 0.7.2 with
-an override to 0.9.0:
-
-```bash
-overrides="$(mktemp)"
-printf '%s\n' 'jupyter-kernel-client==0.9.0' 'websocket-client>=1.6' > "$overrides"
-uv tool install --reinstall --overrides "$overrides" google-colab-cli==0.7.2
-rm -f "$overrides"
-```
-
-`websocket-client>=1.6` also avoids a lower-bound bug in SSH diagnostics:
-0.7.2 declares `>=1.0` but reads `WebSocketBadStatusException.resp_body`,
-which is unavailable before 1.6.
-
-Stock 0.7.2 also writes sensitive runtime/authentication material to local
+Stock 0.7.2 writes sensitive runtime/authentication material to local
 state and debug logs more permissively than it should. Treat
 `~/.config/colab-cli/token.json`, `sessions.json`, `colab.log`, and
 `history/*.jsonl` as secrets; never upload or paste them unredacted. On a
@@ -523,12 +505,6 @@ log file path if exported, and confirmation that cleanup ran.
 
 ## Recovery
 
-- Stock 0.7.2 runtime-proxy credentials expire before a long-lived assignment
-  necessarily ends. If a previously healthy session starts returning 401/404
-  or file commands incorrectly report valid paths as missing after roughly an
-  hour, check `colab sessions` before concluding the VM is gone. Upstream
-  token-refresh fixes are still unmerged; for critical long jobs, checkpoint
-  frequently and prefer recreating the session before credentials age out.
 - Treat `~/.config/colab-cli/history/` as sensitive. Besides executed code and
   outputs, stock 0.7.2 records raw interactive stdin replies, which can include
   one-time auth codes or other secrets. Do not publish/export history without
