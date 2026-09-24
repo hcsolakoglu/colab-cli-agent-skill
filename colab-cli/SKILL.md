@@ -86,6 +86,44 @@ surface and defaults, but inspect installed source when behavior matters; 0.7.2
 itself has at least one stale help string (`update --install` says Linux-only
 although the implementation also supports macOS).
 
+### 0.7.2 packaging regressions (workarounds)
+
+Two declared dependency floors in `google-colab-cli==0.7.2` are wrong and
+produce a broken install straight from PyPI:
+
+- `jupyter-kernel-client==0.8` is pinned, but 0.7.2's execution path imports
+  `JupyterSubprotocol`, which only exists in the published PyPI
+  `jupyter-kernel-client>=0.9.0`. (Version string alone is not a reliable
+  signal: Google's internal source override also reports `0.8.0` while
+  shipping the API. The breakage is specific to the PyPI 0.8.0 wheel.)
+  Result: `colab exec` fails with an `AttributeError`. Fix in the same
+  environment the `colab` binary runs in — plain `pip install` targets the
+  wrong environment for the common install methods:
+  ```bash
+  # uv tool install (default): the CLI lives in an isolated venv that has no
+  # pip; plain `pip` does NOT touch it.
+  uv pip install --python ~/.local/share/uv/tools/google-colab-cli/bin/python \
+    "jupyter-kernel-client>=0.9,<1" "websocket-client>=1.6"
+  # pipx: pipx inject google-colab-cli "jupyter-kernel-client>=0.9,<1" "websocket-client>=1.6"
+  # plain pip / activated venv: pip install "jupyter-kernel-client>=0.9,<1" "websocket-client>=1.6"
+  ```
+  Stay below 1.x: 1.x is not uniformly compatible with the current
+  client-class lookup (`KernelClient` vs `ColabKernelClient`), so `>=0.9,<1`
+  is the conservative workaround. Upstream issue:
+  `googlecolab/google-colab-cli#137`. Note the `>=0.8` floor proposed in
+  `googlecolab/google-colab-cli#138` is insufficient: a stock PyPI 0.8.0
+  install already satisfies it while still missing the API.
+- `websocket-client>=1.0` is declared, but on 1.0 `colab ssh` loses the
+  server's 400 response body (the `resp_body` parameter on
+  `WebSocketBadStatusException` only exists since 1.6.0). Use `>=1.6` —
+  covered by the install command above.
+  Upstream issue: `googlecolab/google-colab-cli#139`.
+
+Verify after installing: `colab version`, then run the import check with the
+CLI's own interpreter (e.g.
+`~/.local/share/uv/tools/google-colab-cli/bin/python -c "from jupyter_kernel_client import JupyterSubprotocol"`)
+— it must succeed.
+
 ## Mental Model
 
 - A session is a live Jupyter kernel on a rented Colab VM. `colab new` allocates
@@ -111,6 +149,9 @@ although the implementation also supports macOS).
   the runtime automatically.
 - Use a named session for multi-step work: `colab new -s <name>`, then
   `colab install`, `colab exec`, `colab download`, `colab log`, `colab stop`.
+- `colab run -s <name>` does not attach to an existing session: `-s` only labels
+  the fresh ephemeral VM that `run` provisions and releases. To execute code on
+  an existing session, use `colab exec -s <name>`.
 - Do not leave paid resources running. Run `colab stop -s <name>` when done, then
   verify with `colab sessions`.
 - Never start unpiped `colab repl` or `colab console` from a non-interactive
@@ -147,7 +188,9 @@ although the implementation also supports macOS).
   assignment count. Treat the numbers as point-in-time account data, not a
   guaranteed rate table; availability, maximum lifetime, idle timeout, and
   accelerator access still vary by tier, demand, and hardware. Do not hardcode
-  old web/forum CU/hour tables as truth.
+  old web/forum CU/hour tables as truth. A dated measured snapshot lives at
+  `references/cu-rate-card-2026-09-24.md` (rates + provisioned hardware per
+  backend, account/region-specific).
 - When the account runs out of compute units, `colab pay` opens the Colab
   subscription page to top up. It launches a browser, so treat it as
   user-interactive and suggest it rather than running it blindly.
@@ -500,6 +543,43 @@ log file path if exported, and confirmation that cleanup ran.
   problems.
 - Cleanup uncertainty: run `colab sessions` and stop any named sessions created
   for the current task.
+
+### Long-session hazards (0.7.2)
+
+- **Proxy token expiry (~1 hour).** The runtime proxy token is captured at
+  session creation and never refreshed: 0.7.2 has no proxy-credential refresh
+  path (`RuntimeProxyInfo.token_expires_in_seconds` is parsed but unused, and
+  nothing updates the stored session token afterwards). After roughly an
+  hour, commands can fail with 401/404 even though the runtime is alive. Do
+  not treat this as "runtime died". Note: re-running auth only refreshes
+  control-plane credentials, NOT the runtime proxy token — so
+  "re-authenticate and retry" does not recover an expired proxy token.
+  Upstream: `googlecolab/google-colab-cli#106`.
+- **The CLI may auto-prune the local binding.** On terminal proxy errors
+  (401/404), 0.7.2 can prune the local session binding automatically even
+  while the backend assignment is still live. So "do not delete the local
+  session binding" is not fully in your hands: after a proxy 401/404, check
+  `colab sessions` — the backend endpoint may still exist and keep billing
+  even if the local name is gone.
+- **A 404 is not always "file not found".** `upload`/`download`/`ls` map any
+  404 to `FileNotFoundError`, so an expired proxy token surfaces as a bogus
+  "file or directory not found". If file operations fail after a long idle
+  period while `exec`/`console` still work, suspect token expiry first, not a
+  missing file. Upstream: `googlecolab/google-colab-cli#140`.
+- **`colab edit` data-loss risk.** If the remote download fails, 0.7.2 opens
+  the editor anyway: for a genuinely missing file that is the "start empty"
+  flow, for anything else it is data loss on save. For important remote
+  files, avoid `colab edit` on 0.7.2 — use explicit
+  `download` → inspect locally → edit → `upload`, and verify the upload
+  succeeded. ("Non-empty temp content" is not a usable check: the temp file
+  is private to the command, and a legitimate remote file can be 0 bytes.)
+- **After an assignment timeout, check before reallocating.** `colab new` can
+  time out client-side while the assignment still materializes server-side.
+  Never immediately create a second session: run `colab sessions` first. If
+  an unexpected endpoint appeared, do NOT allocate again — the orphan keeps
+  billing until unassigned, and 0.7.2 has no `adopt` command. Surface the
+  endpoint and ask how to proceed instead of silently paying for two
+  runtimes.
 
 ## Fast Command Reference
 
