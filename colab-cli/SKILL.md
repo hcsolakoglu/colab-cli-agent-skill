@@ -50,6 +50,31 @@ surface and defaults, but inspect installed source when behavior matters; 0.7.2
 itself has at least one stale help string (`update --install` says Linux-only
 although the implementation also supports macOS).
 
+### 0.7.2 packaging regressions (workarounds)
+
+Two declared dependency floors in `google-colab-cli==0.7.2` are wrong and
+produce a broken install straight from PyPI:
+
+- `jupyter-kernel-client==0.8` is pinned, but 0.7.2's execution path imports
+  `JupyterSubprotocol`, which only exists in `>=0.9.0`. Result: `colab exec`
+  fails with an `AttributeError`. Fix in the same environment the `colab`
+  binary runs in:
+  ```bash
+  pip install "jupyter-kernel-client>=0.9,<1"
+  ```
+  Stay below 1.x: client-class compatibility for 1.x is still unresolved
+  upstream. Upstream issue: `googlecolab/google-colab-cli#137`.
+- `websocket-client>=1.0` is declared, but on 1.0 `colab ssh` loses the
+  server's 400 response body. Use `>=1.6`:
+  ```bash
+  pip install "websocket-client>=1.6"
+  ```
+  Upstream issue: `googlecolab/google-colab-cli#139`.
+
+Verify after installing: `colab version`, then
+`python -c "from jupyter_kernel_client import JupyterSubprotocol"` in the
+CLI's environment must succeed.
+
 ## Mental Model
 
 - A session is a live Jupyter kernel on a rented Colab VM. `colab new` allocates
@@ -422,6 +447,29 @@ log file path if exported, and confirmation that cleanup ran.
   problems.
 - Cleanup uncertainty: run `colab sessions` and stop any named sessions created
   for the current task.
+
+### Long-session hazards (0.7.2)
+
+- **Proxy token expiry (~1 hour).** The runtime proxy token is captured at
+  session creation and never refreshed. After roughly an hour, commands can
+  fail with 401/404 even though the runtime is alive. Do not treat this as
+  "runtime died" and do not delete the local session binding; re-authenticate
+  and retry. Upstream: `googlecolab/google-colab-cli#106`.
+- **A 404 is not always "file not found".** `upload`/`download`/`ls` map any
+  404 to `FileNotFoundError`, so an expired proxy token surfaces as a bogus
+  "file or directory not found". If file operations fail after a long idle
+  period while `exec`/`console` still work, suspect token expiry first, not a
+  missing file. Upstream: `googlecolab/google-colab-cli#140`.
+- **`colab edit` data-loss risk.** If the remote download fails for any reason
+  other than a missing file, 0.7.2 still opens a blank file in the editor and
+  saving overwrites the remote. Until the upstream fix lands, verify the
+  download succeeded (non-empty temp content for an existing file) before
+  editing anything important — or avoid `colab edit` and use
+  `download`/`upload` explicitly.
+- **After an assignment timeout, check before reallocating.** `colab new` can
+  time out client-side while the assignment still materializes server-side.
+  Never immediately create a second session; run `colab sessions` first and
+  adopt the orphan if one appeared, otherwise you pay for two runtimes.
 
 ## Fast Command Reference
 
