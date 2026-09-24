@@ -32,8 +32,11 @@ If already installed but stale:
 colab update --install
 ```
 
-`colab update --install` upgrades in place (Linux only); it detects uv vs pip
-installs automatically.
+`colab update --install` upgrades in place on Linux and macOS. In
+`google-colab-cli==0.7.2`, its `--help` text incorrectly says "Linux only";
+the executable source explicitly supports both Linux and Darwin. Installer
+selection is heuristic: paths containing `/uv/tools/` use `uv tool install -U`,
+otherwise the command uses the current Python's `pip`.
 
 The package supports Linux and macOS. It is not currently a Windows-native CLI.
 The CLI stores session state under `~/.config/colab-cli/` by default.
@@ -41,9 +44,11 @@ The CLI stores session state under `~/.config/colab-cli/` by default.
 The CLI bundles its own operator guide and README, printable with `colab skill`
 and `colab readme`. Treat them as upstream context that can lag the installed
 release: as of `google-colab-cli==0.7.2` the bundled texts still claim `--auth`
-defaults to `adc`, while the installed binary's `colab --help` says `oauth2`.
-When they disagree, trust `colab --help` and `colab <command> --help` from the
-installed binary.
+defaults to `adc`, while the installed binary's `colab --help` and callback
+source default to `oauth2`. Use binary help as the first source for parser
+surface and defaults, but inspect installed source when behavior matters; 0.7.2
+itself has at least one stale help string (`update --install` says Linux-only
+although the implementation also supports macOS).
 
 ## Mental Model
 
@@ -97,20 +102,23 @@ installed binary.
 - For long jobs, write checkpoints and logs to retrievable paths such as
   `/content/outputs` or Google Drive, and download/export artifacts before
   cleanup.
-- For current compute-unit consumption, run `colab usage`: it shows the
-  account's usage rate and balance straight from the API. Treat the numbers as
-  point-in-time account data, not a guaranteed rate table; availability,
-  maximum lifetime, idle timeout, and accelerator access still vary by tier,
-  demand, and hardware. Do not hardcode old web/forum CU/hour tables as truth.
+- For current compute-unit consumption, run `colab usage`: it reads
+  `GET /tun/m/ccu-info` and prints current balance, hourly usage rate, and active
+  assignment count. Treat the numbers as point-in-time account data, not a
+  guaranteed rate table; availability, maximum lifetime, idle timeout, and
+  accelerator access still vary by tier, demand, and hardware. Do not hardcode
+  old web/forum CU/hour tables as truth.
 - When the account runs out of compute units, `colab pay` opens the Colab
   subscription page to top up. It launches a browser, so treat it as
   user-interactive and suggest it rather than running it blindly.
-- High-memory runtimes are available with `--high-mem` on `colab new`,
-  `colab run`, and `colab ssh` (when it auto-creates a runtime):
-  `colab new -s trainer --gpu A100 --high-mem`. Requires Colab Pro or Pro+
-  entitlement for CPU, T4, G4, H100, A100; ignored for L4 and TPU
-  (v5e1, v6e1), which only offer a single shape. Verify the assigned shape
-  with `colab status -s <name>` (shows "High-RAM" vs "Standard").
+- `--high-mem` is accepted by `colab new`, `colab run`, and `colab ssh`
+  when SSH creates a runtime: `colab new -s trainer --gpu A100 --high-mem`.
+  In 0.7.2 the client sends `shape=hm` for CPU, T4, G4, H100, and A100, while
+  L4 and TPU (`v5e1`, `v6e1`) omit the shape and print an ignored-flag warning
+  because they are treated as single-shape accelerators. The binary help says
+  high-RAM requests require "Colab Pro or Pro+ entitlement"; actual backend
+  entitlement and availability remain account-dependent. Verify the assigned
+  shape with `colab status -s <name>` ("High-RAM" vs "Standard").
 
 ## Backend Inventory And Benchmarking
 
@@ -129,8 +137,11 @@ supported selector can still return `Service Unavailable` or fall back in the
 web UI. Always inspect the actual assigned hardware with `nvidia-smi`, CPU/RAM
 checks, and task-specific benchmarks.
 
-An unrecognized `--gpu` value silently falls back to A100 (which usually fails
-next with a quota error); spell selectors exactly: T4, L4, G4, H100, A100.
+0.7.2 does not validate accelerator selector strings strictly: an unrecognized
+`--gpu` value silently maps to A100, and an unrecognized `--tpu` value silently
+maps to v6e1. Do not rely on either fallback or predict the backend error that
+may follow; spell selectors exactly: GPU `T4`, `L4`, `G4`, `H100`, `A100`; TPU
+`v5e1`, `v6e1`.
 
 For a compact VPS-style profile, run the bundled benchmark script:
 
@@ -204,7 +215,8 @@ colab --auth adc whoami
 ```
 
 `auth` and `whoami` are hidden commands (absent from `colab --help`'s list) but
-fully functional.
+remain registered and directly callable. `whoami` is a read-only credential
+inspection command; `auth` starts the interactive in-VM Google auth flow.
 
 If `colab.pa.googleapis.com` returns 403, first check for a missing
 `colaboratory` scope with `colab whoami`. Do not retry allocations blindly.
@@ -228,6 +240,8 @@ colab run --keep -s inspect-job script.py
 ```
 
 Default execution timeout is 30.0s; pass an explicit `--timeout` for long jobs.
+`--env KEY=VALUE` is repeatable; if the same key is supplied more than once,
+the last value wins.
 
 Use `--keep` only when you need to inspect the runtime afterward. If you use it,
 stop the session explicitly:
@@ -299,6 +313,7 @@ colab exec -s analysis --env BATCH=32 -f script.py
 ```
 
 Default execution timeout is 30.0s; pass an explicit `--timeout` for long jobs.
+`--env KEY=VALUE` is repeatable here too, with the last duplicate key winning.
 
 Pipe short code through stdin:
 
@@ -330,14 +345,20 @@ printf '%s\n' "pwd; ls -la /content" | colab console -s analysis
 
 ### Remote Shell Access
 
-`colab ssh -s <name>` opens an interactive SSH shell on the runtime over
-WebSocket; bare `colab ssh` attaches to your only active session or
-auto-creates one (with `--gpu`/`--tpu`/`--high-mem` for auto-created
-runtimes). `--rm` stops the runtime on disconnect. `--proxy-mode` acts as a
-ProxyCommand bridge for IDE remote-dev
-(`ProxyCommand colab ssh --proxy-mode -s SESS` in `~/.ssh/config`).
-Interactive/TTY-oriented: do not run unpiped from a non-interactive agent
-shell.
+`colab ssh -s <name>` opens an interactive SSH shell over WebSocket. In normal
+interactive mode, bare `colab ssh` auto-creates only when there are zero local
+sessions; with exactly one active session it attaches to that session, and with
+multiple sessions it requires `-s`. `--gpu`/`--tpu`/`--high-mem` only affect a
+runtime created by the SSH command. Interactive `--rm` removes only a runtime
+that this `colab ssh` auto-created; it is ignored for an existing session.
+
+`--proxy-mode` acts as a ProxyCommand bridge for IDE remote-dev
+(`ProxyCommand colab ssh --proxy-mode -s SESS` in `~/.ssh/config`). In proxy
+mode, a missing named `-s SESS` is auto-created and `--rm` stops the bridged
+session on disconnect; bare proxy mode with no active session does not
+auto-create one. `-i/--identity` selects the SSH private key (default: first of
+`~/.ssh/id_ed25519`, `~/.ssh/id_ecdsa`). Interactive mode is TTY-oriented: do
+not run it unpiped from a non-interactive agent shell.
 
 ## Files And Environment
 
@@ -408,8 +429,8 @@ log file path if exported, and confirmation that cleanup ran.
 colab new -s NAME [--gpu T4|L4|G4|H100|A100] [--tpu v5e1|v6e1] [--high-mem]
 colab sessions
 colab status -s NAME
-colab run [--gpu GPU|--tpu TPU] [--high-mem] [--keep] [--env KEY=VALUE] SCRIPT [ARGS...]
-colab exec -s NAME -f FILE [--timeout SECONDS] [--env KEY=VALUE]
+colab run [--gpu GPU|--tpu TPU] [--high-mem] [--keep] [--env KEY=VALUE]... SCRIPT [ARGS...]
+colab exec -s NAME -f FILE [--timeout SECONDS] [--env KEY=VALUE]...
 colab install -s NAME PKG...
 colab install -s NAME -r requirements.txt
 colab upload -s NAME LOCAL REMOTE
