@@ -17,9 +17,11 @@ colab version
 
 Preferred route: [Vercel Labs' Skills CLI](https://github.com/vercel-labs/skills)
 (`npx skills`), the open tool for installing agent skills across coding agents
-and harnesses. One command installs the skill into every supported agent on the
-machine — Codex, Claude Code, OpenCode, Cursor, Gemini CLI, and 70+ more.
-Browse the ecosystem and the full agent list at [skills.sh](https://skills.sh).
+and harnesses. With `--agent '*'`, one command targets all agent integrations
+supported by the Skills CLI — Codex, Claude Code, OpenCode, Cursor, Gemini CLI,
+and 70+ more. Agents that do not support global skills are skipped or reported
+as unsupported. Browse the skills ecosystem and agent directory at
+[skills.sh](https://skills.sh).
 
 ```bash
 npx skills add hcsolakoglu/colab-cli-agent-skill -g --agent '*' --skill colab-cli -y
@@ -40,8 +42,10 @@ npx skills update colab-cli -g -y
 ### Why no `--copy`?
 
 The Skills CLI defaults to symlinks, which keeps the skill as a single source
-of truth: one real copy under `~/.agents/skills/colab-cli/` and a symlink in
-every other supported agent's skills directory. Pass `--copy` only if you
+of truth: one real copy under `~/.agents/skills/colab-cli/`, with symlinks
+into each supported agent's skills directory (agents that cannot host a
+symlink, or that do not support global skills, are handled per-agent).
+Pass `--copy` only if you
 specifically need each agent to have an independent file copy (for example,
 to edit one agent's copy in isolation). The symlink mode is what avoids
 duplicate skill entries showing up in agents that auto-read both
