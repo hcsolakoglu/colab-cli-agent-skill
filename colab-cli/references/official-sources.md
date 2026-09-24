@@ -7,7 +7,7 @@ Use these primary sources when behavior may have changed:
 - Google Colab CLI GitHub repository:
   `https://github.com/googlecolab/google-colab-cli`
 - Bundled upstream agent skill:
-  `https://github.com/googlecolab/google-colab-cli/blob/main/COLAB_SKILL.md`
+  `https://github.com/googlecolab/google-colab-cli/blob/main/skills/colab-operator/SKILL.md`
 - Google Colab FAQ for resource limits, runtime duration, and paid-plan caveats:
   `https://research.google.com/colaboratory/faq.html`
 - PyPI release history for `google-colab-cli` (watch for new versions):

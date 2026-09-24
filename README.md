@@ -13,6 +13,23 @@ uv tool install google-colab-cli
 colab version
 ```
 
+### 0.7.2 release workaround
+
+PyPI `google-colab-cli==0.7.2` incorrectly pins
+`jupyter-kernel-client==0.8`, while its runtime code requires APIs first
+available in PyPI 0.9.0. A stock 0.7.2 install can therefore allocate a runtime
+but fail on `colab exec`. Until a fixed upstream release is published:
+
+```bash
+overrides="$(mktemp)"
+printf '%s\n' 'jupyter-kernel-client==0.9.0' 'websocket-client>=1.6' > "$overrides"
+uv tool install --reinstall --overrides "$overrides" google-colab-cli==0.7.2
+rm -f "$overrides"
+```
+
+The skill also documents current 0.7.2 security/reliability caveats around
+local debug logs, `--env` history, and long-lived runtime proxy credentials.
+
 ## Install the skill globally
 
 Preferred route: [Vercel Labs' Skills CLI](https://github.com/vercel-labs/skills)

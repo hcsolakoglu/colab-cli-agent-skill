@@ -26,6 +26,24 @@ If missing, install it with `uv`:
 uv tool install google-colab-cli
 ```
 
+### Additional 0.7.2 local security hazards
+
+Stock 0.7.2 writes sensitive runtime/authentication material to local
+state and debug logs more permissively than it should. Treat
+`~/.config/colab-cli/token.json`, `sessions.json`, `colab.log`, and
+`history/*.jsonl` as secrets; never upload or paste them unredacted. On a
+multi-user machine, restrict them to the current user:
+
+```bash
+chmod 700 ~/.config/colab-cli ~/.config/colab-cli/history 2>/dev/null || true
+chmod 600 ~/.config/colab-cli/{token.json,sessions.json,colab.log,settings.json} 2>/dev/null || true
+chmod 600 ~/.config/colab-cli/history/*.jsonl 2>/dev/null || true
+```
+
+On stock 0.7.2, avoid using `--env` for secrets: the CLI injects the value
+into executed Python and persists that expanded code in session history.
+Non-secret configuration values are fine.
+
 If already installed but stale:
 
 ```bash
@@ -97,15 +115,18 @@ CLI's own interpreter (e.g.
   `colab restart-kernel` or `colab stop`.
 - Execution starts in `/content`. Prefer absolute `/content/...` paths for
   remote files so later `ls`, `download`, and cleanup commands are unambiguous.
-- Each CLI command authenticates, performs one operation, and exits. The
+- Commands that access the Colab control plane authenticate on demand, perform
+  their operation, and exit. Pure informational commands such as `version`,
+  `help`, and `readme` do not need control-plane authentication. The
   keep-alive process is managed by the CLI after allocation.
 
 ## Agent Rules
 
 - Always make a lifecycle plan before allocating compute: session name, hardware,
   commands to run, artifacts to retrieve, and cleanup command.
-- Always use a session name with `-s <name>` for allocated sessions. Auto-named
-  sessions are harder to clean up and report on.
+- Use an explicit session name with `-s <name>` for `colab new`, multi-step
+  sessions, and `colab run --keep`. Plain one-shot `colab run` may safely
+  use its generated ephemeral name because it tears the runtime down itself.
 - Prefer `colab run` for one-shot jobs because it provisions, executes, and stops
   the runtime automatically.
 - Use a named session for multi-step work: `colab new -s <name>`, then
@@ -131,8 +152,9 @@ CLI's own interpreter (e.g.
 
 - Treat every allocated Colab session as potentially credit-consuming until it
   is explicitly stopped.
-- End every workflow with `colab stop -s <name>` for sessions you created, then
-  run `colab sessions` to confirm there are no leftover active sessions.
+- End every persistent-session workflow with `colab stop -s <name>`, then run
+  `colab sessions` to confirm there are no leftover active sessions. Plain
+  `colab run` stops its own runtime unless `--keep` is set.
 - Prefer `colab run` for one-shot work because it stops the runtime
   automatically unless `--keep` is set.
 - Avoid `--keep` unless the user needs post-run inspection. If `--keep` is used,
@@ -160,8 +182,11 @@ CLI's own interpreter (e.g.
   L4 and TPU (`v5e1`, `v6e1`) omit the shape and print an ignored-flag warning
   because they are treated as single-shape accelerators. The binary help says
   high-RAM requests require "Colab Pro or Pro+ entitlement"; actual backend
-  entitlement and availability remain account-dependent. Verify the assigned
-  shape with `colab status -s <name>` ("High-RAM" vs "Standard").
+  entitlement and availability remain account-dependent. Verify the
+  backend-reported assigned shape with `colab sessions`. In 0.7.2,
+  `colab status -s <name>` renders the machine shape stored in local session
+  state, so it can reflect the requested shape rather than the backend's actual
+  assignment.
 
 ## Backend Inventory And Benchmarking
 
@@ -235,8 +260,16 @@ colab --auth oauth2 sessions
 colab --auth adc sessions
 ```
 
-`oauth2` is the default in the installed CLI. First use may open a browser
-consent flow using the client config at `~/.colab-cli-oauth-config.json`.
+`oauth2` is the default in the installed CLI. On first authorization, 0.7.2
+prints an authorization URL and waits for the user to paste back Google's
+authorization code; it does not automatically open a browser. It uses
+`~/.colab-cli-oauth-config.json` (or `-c PATH`) when present and otherwise
+falls back to its bundled OAuth client config.
+
+On stock 0.7.2, grant the full requested OAuth2 scope set. Upstream issue #116
+documents a still-open granular-consent bug: accepting only a subset can make
+the initial exchange fail and can later make refresh fall back to a fresh
+consent flow.
 
 `adc` uses Google Application Default Credentials and is usually better for
 headless agent workflows once configured. If ADC user credentials fail with scope
@@ -261,8 +294,10 @@ colab --auth adc whoami
 remain registered and directly callable. `whoami` is a read-only credential
 inspection command; `auth` starts the interactive in-VM Google auth flow.
 
-If `colab.pa.googleapis.com` returns 403, first check for a missing
-`colaboratory` scope with `colab whoami`. Do not retry allocations blindly.
+For control-plane 401/403 errors, first run `colab whoami` and inspect the
+active provider and scopes. Current 0.7.2 session allocation and keep-alive use
+`colab.research.google.com`; do not use old
+`colab.pa.googleapis.com` keep-alive troubleshooting as current guidance.
 
 ## One-Shot Jobs
 
@@ -284,7 +319,8 @@ colab run --keep -s inspect-job script.py
 
 Default execution timeout is 30.0s; pass an explicit `--timeout` for long jobs.
 `--env KEY=VALUE` is repeatable; if the same key is supplied more than once,
-the last value wins.
+the last value wins. On stock 0.7.2, use it only for non-secret values because
+expanded environment assignments are persisted in local session history.
 
 Use `--keep` only when you need to inspect the runtime afterward. If you use it,
 stop the session explicitly:
@@ -357,6 +393,8 @@ colab exec -s analysis --env BATCH=32 -f script.py
 
 Default execution timeout is 30.0s; pass an explicit `--timeout` for long jobs.
 `--env KEY=VALUE` is repeatable here too, with the last duplicate key winning.
+On stock 0.7.2, do not pass secrets through this flag because their values are
+written into local execution history.
 
 Pipe short code through stdin:
 
@@ -415,6 +453,12 @@ colab rm -s analysis /content/temp.txt
 colab edit -s analysis /content/config.py
 ```
 
+On stock 0.7.2, prefer an explicit `download -> local edit -> upload` sequence
+for valuable existing files instead of `colab edit`. The released
+`colab edit` catches any download exception as if the remote file did not
+exist; a transient transport/auth failure can therefore open an empty temp file
+and later overwrite the remote path if the user saves changes.
+
 Install packages on the VM:
 
 ```bash
@@ -431,6 +475,12 @@ colab auth -s analysis
 
 These commands can prompt the user, so do not run them blindly in a
 non-interactive agent environment.
+
+`colab drivemount` also has an unresolved CLI-only failure mode tracked
+upstream as issue #113: browser authorization can succeed while the remote
+`drive.mount()` still reaches its internal ~120s timeout. Do not treat browser
+consent success alone as proof that Drive mounted; verify the mount remotely
+before depending on it.
 
 ## Logs And Reporting
 
@@ -455,6 +505,10 @@ log file path if exported, and confirmation that cleanup ran.
 
 ## Recovery
 
+- Treat `~/.config/colab-cli/history/` as sensitive. Besides executed code and
+  outputs, stock 0.7.2 records raw interactive stdin replies, which can include
+  one-time auth codes or other secrets. Do not publish/export history without
+  reviewing and redacting it first.
 - `Session not found`: run `colab sessions`; recreate the session if the backend
   pruned it.
 - Kernel stuck or timeout: run `colab restart-kernel -s <name>` once, then retry.
