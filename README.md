@@ -15,9 +15,11 @@ colab version
 
 ## Install the skill globally
 
-Preferred route: use the Skills CLI, because it installs the skill into the
-global locations for Codex, OpenCode, Hermes Agent, Claude Code, Cursor, Gemini
-CLI, and other supported coding agents in one command.
+Preferred route: [Vercel Labs' Skills CLI](https://github.com/vercel-labs/skills)
+(`npx skills`), the open tool for installing agent skills across coding agents
+and harnesses. One command installs the skill into every supported agent on the
+machine — Codex, Claude Code, OpenCode, Cursor, Gemini CLI, and 70+ more.
+Browse the ecosystem and the full agent list at [skills.sh](https://skills.sh).
 
 ```bash
 npx skills add hcsolakoglu/colab-cli-agent-skill -g --agent '*' --skill colab-cli -y
@@ -27,6 +29,12 @@ Check the global install:
 
 ```bash
 npx skills list -g --json
+```
+
+Keep the skill updated as the repo evolves:
+
+```bash
+npx skills update colab-cli -g -y
 ```
 
 ### Why no `--copy`?
