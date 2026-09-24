@@ -32,14 +32,18 @@ If already installed but stale:
 colab update --install
 ```
 
+`colab update --install` upgrades in place (Linux only); it detects uv vs pip
+installs automatically.
+
 The package supports Linux and macOS. It is not currently a Windows-native CLI.
 The CLI stores session state under `~/.config/colab-cli/` by default.
 
 The CLI bundles its own operator guide and README, printable with `colab skill`
 and `colab readme`. Treat them as upstream context that can lag the installed
-release (they claim `--auth` defaults to `adc`, while `google-colab-cli==0.6.0`
-defaults to `oauth2`); when they disagree, trust `colab --help` and
-`colab <command> --help` from the installed binary.
+release: as of `google-colab-cli==0.7.2` the bundled texts still claim `--auth`
+defaults to `adc`, while the installed binary's `colab --help` says `oauth2`.
+When they disagree, trust `colab --help` and `colab <command> --help` from the
+installed binary.
 
 ## Mental Model
 
@@ -93,20 +97,20 @@ defaults to `oauth2`); when they disagree, trust `colab --help` and
 - For long jobs, write checkpoints and logs to retrievable paths such as
   `/content/outputs` or Google Drive, and download/export artifacts before
   cleanup.
-- The Colab CLI does not currently expose a reliable CU/hour value. For hourly
-  credit consumption, use Colab's UI/resource panel or account page for the
-  active runtime and record the observed rate in task notes. Do not hardcode old
-  web/forum CU/hour tables as truth.
+- For current compute-unit consumption, run `colab usage`: it shows the
+  account's usage rate and balance straight from the API. Treat the numbers as
+  point-in-time account data, not a guaranteed rate table; availability,
+  maximum lifetime, idle timeout, and accelerator access still vary by tier,
+  demand, and hardware. Do not hardcode old web/forum CU/hour tables as truth.
 - When the account runs out of compute units, `colab pay` opens the Colab
   subscription page to top up. It launches a browser, so treat it as
   user-interactive and suggest it rather than running it blindly.
-- High-memory runtime selection exists in the Colab web UI, but
-  `google-colab-cli==0.6.0` (verified 2026-08-17) still does not expose a
-  high-memory flag. The installed CLI source defines assignment `Shape` for
-  listed sessions, but `colab new` and `colab run` only send `variant` plus
-  `accelerator`; agents must not invent a `--high-mem` flag. If high-memory
-  CPU/T4/A100 is required, ask the user to create it in the web UI, or run
-  `colab update` to check whether a newer CLI release added shape support.
+- High-memory runtimes are available with `--high-mem` on `colab new`,
+  `colab run`, and `colab ssh` (when it auto-creates a runtime):
+  `colab new -s trainer --gpu A100 --high-mem`. Requires Colab Pro or Pro+
+  entitlement for CPU, T4, G4, H100, A100; ignored for L4 and TPU
+  (v5e1, v6e1), which only offer a single shape. Verify the assigned shape
+  with `colab status -s <name>` (shows "High-RAM" vs "Standard").
 
 ## Backend Inventory And Benchmarking
 
@@ -124,6 +128,9 @@ Availability is account-, region-, demand-, and subscription-dependent. A
 supported selector can still return `Service Unavailable` or fall back in the
 web UI. Always inspect the actual assigned hardware with `nvidia-smi`, CPU/RAM
 checks, and task-specific benchmarks.
+
+An unrecognized `--gpu` value silently falls back to A100 (which usually fails
+next with a quota error); spell selectors exactly: T4, L4, G4, H100, A100.
 
 For a compact VPS-style profile, run the bundled benchmark script:
 
@@ -196,6 +203,9 @@ colab whoami
 colab --auth adc whoami
 ```
 
+`auth` and `whoami` are hidden commands (absent from `colab --help`'s list) but
+fully functional.
+
 If `colab.pa.googleapis.com` returns 403, first check for a missing
 `colaboratory` scope with `colab whoami`. Do not retry allocations blindly.
 
@@ -213,8 +223,11 @@ Useful options:
 colab run --gpu T4 script.py
 colab run --gpu L4 --timeout 600 script.py
 colab run --tpu v5e1 script.py
+colab run --gpu T4 --env EPOCHS=1 train.py
 colab run --keep -s inspect-job script.py
 ```
+
+Default execution timeout is 30.0s; pass an explicit `--timeout` for long jobs.
 
 Use `--keep` only when you need to inspect the runtime afterward. If you use it,
 stop the session explicitly:
@@ -282,7 +295,10 @@ Run local Python code on an existing session:
 
 ```bash
 colab exec -s analysis -f script.py --timeout 300
+colab exec -s analysis --env BATCH=32 -f script.py
 ```
+
+Default execution timeout is 30.0s; pass an explicit `--timeout` for long jobs.
 
 Pipe short code through stdin:
 
@@ -311,6 +327,17 @@ printf '%s\n' "pwd; ls -la /content" | colab console -s analysis
 ```
 
 `console` uses a terminal shell, so captured output can contain control bytes.
+
+### Remote Shell Access
+
+`colab ssh -s <name>` opens an interactive SSH shell on the runtime over
+WebSocket; bare `colab ssh` attaches to your only active session or
+auto-creates one (with `--gpu`/`--tpu`/`--high-mem` for auto-created
+runtimes). `--rm` stops the runtime on disconnect. `--proxy-mode` acts as a
+ProxyCommand bridge for IDE remote-dev
+(`ProxyCommand colab ssh --proxy-mode -s SESS` in `~/.ssh/config`).
+Interactive/TTY-oriented: do not run unpiped from a non-interactive agent
+shell.
 
 ## Files And Environment
 
@@ -356,6 +383,9 @@ colab log -s analysis -o analysis-log.jsonl
 
 The `-o` suffix picks the export format: `.ipynb`, `.md`, `.txt`, or `.jsonl`.
 
+Use `colab help <command>` for per-command options and defaults; it is
+equivalent to `colab <command> --help`.
+
 When reporting completion, include the session name, hardware, files retrieved,
 log file path if exported, and confirmation that cleanup ran.
 
@@ -375,11 +405,11 @@ log file path if exported, and confirmation that cleanup ran.
 ## Fast Command Reference
 
 ```bash
-colab new -s NAME [--gpu T4|L4|G4|H100|A100] [--tpu v5e1|v6e1]
+colab new -s NAME [--gpu T4|L4|G4|H100|A100] [--tpu v5e1|v6e1] [--high-mem]
 colab sessions
 colab status -s NAME
-colab run [--gpu GPU|--tpu TPU] [--keep] SCRIPT [ARGS...]
-colab exec -s NAME -f FILE [--timeout SECONDS]
+colab run [--gpu GPU|--tpu TPU] [--high-mem] [--keep] [--env KEY=VALUE] SCRIPT [ARGS...]
+colab exec -s NAME -f FILE [--timeout SECONDS] [--env KEY=VALUE]
 colab install -s NAME PKG...
 colab install -s NAME -r requirements.txt
 colab upload -s NAME LOCAL REMOTE
@@ -387,7 +417,10 @@ colab download -s NAME REMOTE LOCAL
 colab log -s NAME [-n N|-o FILE]
 colab restart-kernel -s NAME
 colab url -s NAME [--open] [--host HOST]
+colab ssh [-s NAME] [--proxy-mode] [-i KEY] [--gpu GPU] [--tpu TPU] [--high-mem] [--rm]
 colab stop -s NAME
+colab usage
+colab help [COMMAND]
 colab pay
 colab skill
 colab whoami
