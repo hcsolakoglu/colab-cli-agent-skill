@@ -5,6 +5,12 @@ This is an observed snapshot from one Colab Pro+ account using
 availability, runtime lifetime, idle timeout, and compute-unit consumption vary
 by account, subscription tier, current demand, region, and hardware choice.
 
+**Historical behavior only:** do not use this snapshot as current CLI
+documentation. In `google-colab-cli==0.7.2`, `--high-mem` is available on
+`new`, `run`, and SSH auto-create, and `colab usage` reports current
+account balance, usage rate, and active assignment count. Use
+`../SKILL.md` for current operational guidance.
+
 The CLI-supported selectors at the time were:
 
 - CPU: no accelerator flag
@@ -26,9 +32,9 @@ Observed UI behavior on this account:
 - A100: high-memory choice available.
 - L4, TPU v5e-1, TPU v6e-1: appeared to use fixed high-memory shapes.
 
-If a task specifically needs high-memory CPU/T4/A100, the agent should not use a
-fake CLI flag. Ask the user to create the runtime in the web UI, attach/use it
-from Colab, or first verify that a newer CLI release added shape support.
+At the time of this 0.5.9 snapshot, a task that specifically needed
+high-memory CPU/T4/A100 could not request it through the CLI and required the
+web UI or a future CLI release. This limitation no longer applies to 0.7.2.
 
 ## Observed Allocations
 
@@ -89,13 +95,11 @@ Additional community reports found on 2026-06-06 conflicted with each other:
   ~7 CU/hour. Because these are community reports and Colab rates can change,
   prefer the active runtime's UI value over any cached table.
 
-For a live job, inspect the Colab UI resource/account panel for the active
-runtime's current CU/hour value and record that task-local value before long
-runs.
-
-If an agent cannot read the UI, it should say the CU/hour value is not
-CLI-discoverable, choose the lowest adequate runtime, and stop the session
-promptly after the job.
+At the time of this 0.5.9 snapshot, the CLI did not expose live CU/hour or
+account balance, so the UI was required. In 0.7.2, use `colab usage` for the
+current account balance, usage rate, and active assignment count; continue to
+treat those values as point-in-time observations rather than a permanent rate
+table.
 
 ## Reproduce
 

@@ -7,7 +7,11 @@ SCRIPT="$ROOT/colab-cli/scripts/benchmark-runtime.py"
 ATTEMPTS="${ATTEMPTS:-120}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-30}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-900}"
-GPUS=("${@:-T4 L4 G4 A100 H100}")
+if (($#)); then
+  GPUS=("$@")
+else
+  GPUS=(T4 L4 G4 A100 H100)
+fi
 
 mkdir -p "$RESULTS"
 
