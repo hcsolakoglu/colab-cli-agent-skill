@@ -12,11 +12,11 @@ re-measure with `colab usage` for current numbers.
 One short-lived session per backend config. While exactly one assignment was
 active, the account-level hourly burn rate was read from `colab usage`
 (`GET /tun/m/ccu-info`), then the session was stopped immediately (~1-2 min
-each). Total sweep cost: 0.14 CU. Hardware verified per backend with
-`colab run` executing an inventory script (lscpu, /proc/cpuinfo, /proc/meminfo,
-df, nvidia-smi, jax devices). Safe fields only: no hostname, IPs, MACs,
-usernames, or env vars. All backends: Ubuntu 24.04, Python 3.13.15, GPU
-driver 580.82.07.
+each). Hardware verified per backend with `colab run` executing an inventory
+script (lscpu, /proc/cpuinfo, /proc/meminfo, df, nvidia-smi, jax devices).
+Safe fields only: no hostname, IPs, MACs, usernames, or env vars. All
+backends: Ubuntu 24.04, Python 3.13.15, GPU driver 580.82.07. Total cost of
+the sweep + inventory: 0.29 CU.
 
 ## Rates (CU/hour) + provisioned hardware
 
@@ -41,9 +41,11 @@ A100 19, A100-hm 15, v5e1 34, v6e1 25.
 
 ## Notes
 
-- A100 standard provisions the **40GB** variant; `--high-mem` provisions the
-  **80GB** variant. Colab auto-selects the variant; the 5.30 rate was measured
-  on 40GB.
+- A100 standard provisions the **40GB** variant (3/3 allocations on
+  2026-09-24); `--high-mem` provisions the **80GB** variant **plus** the
+  175GB-RAM VM as one bundle. The variant is not independently selectable:
+  the CLI/API `Accelerator` enum has only `A100`; Colab assigns server-side.
+  Matches the 2026-06-06 UI observation ("A100-SXM4-80GB high-memory ~6.77").
 - L4, TPU v5e1, and TPU v6e1 exist in a **single machine shape only**
   (`HIGH_MEM_ONLY_ACCELERATORS` in google-colab-cli 0.7.2 source): the CLI
   drops `--high-mem` client-side with a warning, so there is no separate
