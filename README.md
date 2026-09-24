@@ -3,7 +3,7 @@
 Portable agent skill for using the Google Colab CLI to provision Colab CPU,
 GPU, and TPU runtimes from a terminal agent.
 
-Skill guidance verified against `google-colab-cli==0.6.0` on 2026-08-17.
+Skill guidance verified against `google-colab-cli==0.7.2` on 2026-09-24.
 Re-verify command surface with `colab --help` after upgrading the CLI.
 
 ## Install the CLI
