@@ -3,8 +3,7 @@
 Portable agent skill for using the Google Colab CLI to provision Colab CPU,
 GPU, and TPU runtimes from a terminal agent.
 
-Skill guidance verified against `google-colab-cli==0.7.2` on 2026-09-24.
-Re-verify command surface with `colab --help` after upgrading the CLI.
+Skill guidance revalidated on 2026-09-29 against `google-colab-cli==0.7.4` and current upstream `main`. Re-verify command surface with `colab --help` after upgrading the CLI.
 
 ## Install the CLI
 
@@ -13,22 +12,18 @@ uv tool install google-colab-cli
 colab version
 ```
 
-### 0.7.2 release workaround
+### Release status
 
-PyPI `google-colab-cli==0.7.2` incorrectly pins
-`jupyter-kernel-client==0.8`, while its runtime code requires APIs first
-available in PyPI 0.9.0. A stock 0.7.2 install can therefore allocate a runtime
-but fail on `colab exec`. Until a fixed upstream release is published:
+Upgrade old 0.7.2 installs. Version 0.7.4 fixes the broken
+`jupyter-kernel-client==0.8` packaging and automatic runtime-proxy token
+refresh. Current upstream `main` additionally raises the `websocket-client`
+floor to `>=1.6`; an exact 0.7.4 environment may still need that dependency
+upgrade for complete `colab ssh` HTTP-error diagnostics.
 
-```bash
-overrides="$(mktemp)"
-printf '%s\n' 'jupyter-kernel-client==0.9.0' 'websocket-client>=1.6' > "$overrides"
-uv tool install --reinstall --overrides "$overrides" google-colab-cli==0.7.2
-rm -f "$overrides"
-```
-
-The skill also documents current 0.7.2 security/reliability caveats around
-local debug logs, `--env` history, and long-lived runtime proxy credentials.
+The skill retains only caveats still present in current upstream, including
+local secret/history exposure, broad `colab edit` download-error handling,
+assignment timeout reconciliation, stale `status` machine-shape reporting,
+and invalid accelerator strings silently mapping to fallback accelerators.
 
 ## Install the skill globally
 

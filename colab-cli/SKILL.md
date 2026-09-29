@@ -1,8 +1,6 @@
 ---
 name: colab-cli
-description: Use Google Colab CLI from a terminal agent to provision CPU, GPU, or TPU Colab runtimes, run local Python scripts and notebooks remotely, install packages, move files, export logs, and clean up sessions. Trigger when the user asks for Colab runtimes, remote GPU/TPU execution, QLoRA/fine-tuning on Colab, notebook execution on Colab, or `colab` CLI help.
-metadata:
-  short-description: Operate Google Colab runtimes from the CLI
+description: Use Google Colab CLI from a terminal agent to provision CPU, GPU, or TPU runtimes, run Python scripts and notebooks remotely, install packages, move files, export logs, diagnose authentication or allocation failures, and clean up sessions. Use for Colab runtime work, remote GPU/TPU execution, QLoRA or fine-tuning on Colab, notebook execution, Colab CLI troubleshooting, or `colab` command guidance.
 ---
 
 # Colab CLI
@@ -26,13 +24,38 @@ If missing, install it with `uv`:
 uv tool install google-colab-cli
 ```
 
-### Additional 0.7.2 local security hazards
+### Current release and remaining hardening caveats
 
-Stock 0.7.2 writes sensitive runtime/authentication material to local
-state and debug logs more permissively than it should. Treat
-`~/.config/colab-cli/token.json`, `sessions.json`, `colab.log`, and
-`history/*.jsonl` as secrets; never upload or paste them unredacted. On a
-multi-user machine, restrict them to the current user:
+Guidance was revalidated on 2026-09-29 against upstream `main` after
+`google-colab-cli==0.7.4`.
+
+Upgrade old 0.7.2 installs before troubleshooting their known dependency and
+runtime-token failures:
+
+```bash
+colab update --install
+colab version
+```
+
+Version 0.7.4 fixes the 0.7.2 `jupyter-kernel-client==0.8` execution breakage
+and adds automatic runtime-proxy token refresh. Do not keep the old
+`jupyter-kernel-client>=0.9,<1` workaround or the old "~1 hour proxy token
+expiry" recovery procedure once 0.7.4+ is installed.
+
+Current upstream `main` also pins `websocket-client>=1.6`; the v0.7.4 tag
+still declared `>=1.0`. If an exact 0.7.4 environment resolves an older
+WebSocket client and `colab ssh` loses the server's HTTP 400 reason, upgrade
+that dependency inside the same environment as the `colab` executable:
+
+```bash
+uv pip install --python ~/.local/share/uv/tools/google-colab-cli/bin/python \
+  "websocket-client>=1.6"
+```
+
+Several local-security and reliability findings remain in current upstream.
+Treat `~/.config/colab-cli/token.json`, `sessions.json`, `colab.log`, and
+`history/*.jsonl` as sensitive and never publish them unredacted. On
+multi-user machines, restrict them to the current user:
 
 ```bash
 chmod 700 ~/.config/colab-cli ~/.config/colab-cli/history 2>/dev/null || true
@@ -40,71 +63,14 @@ chmod 600 ~/.config/colab-cli/{token.json,sessions.json,colab.log,settings.json}
 chmod 600 ~/.config/colab-cli/history/*.jsonl 2>/dev/null || true
 ```
 
-On stock 0.7.2, avoid using `--env` for secrets: the CLI injects the value
-into executed Python and persists that expanded code in session history.
-Non-secret configuration values are fine.
+Do not use `--env` for secrets on stock upstream: environment values can be
+embedded in executed Python/history. Interactive stdin replies are also stored
+in history. Use proper remote secret-loading mechanisms and review history
+before sharing it.
 
-If already installed but stale:
-
-```bash
-colab update --install
-```
-
-`colab update --install` upgrades in place on Linux and macOS. In
-`google-colab-cli==0.7.2`, its `--help` text incorrectly says "Linux only";
-the executable source explicitly supports both Linux and Darwin. Installer
-selection is heuristic: paths containing `/uv/tools/` use `uv tool install -U`,
-otherwise the command uses the current Python's `pip`.
-
-The package supports Linux and macOS. It is not currently a Windows-native CLI.
-The CLI stores session state under `~/.config/colab-cli/` by default.
-
-The CLI bundles its own operator guide and README, printable with `colab skill`
-and `colab readme`. Treat them as upstream context that can lag the installed
-release: as of `google-colab-cli==0.7.2` the bundled texts still claim `--auth`
-defaults to `adc`, while the installed binary's `colab --help` and callback
-source default to `oauth2`. Use binary help as the first source for parser
-surface and defaults, but inspect installed source when behavior matters; 0.7.2
-itself has at least one stale help string (`update --install` says Linux-only
-although the implementation also supports macOS).
-
-### 0.7.2 packaging regressions (workarounds)
-
-Two declared dependency floors in `google-colab-cli==0.7.2` are wrong and
-produce a broken install straight from PyPI:
-
-- `jupyter-kernel-client==0.8` is pinned, but 0.7.2's execution path imports
-  `JupyterSubprotocol`, which only exists in the published PyPI
-  `jupyter-kernel-client>=0.9.0`. (Version string alone is not a reliable
-  signal: Google's internal source override also reports `0.8.0` while
-  shipping the API. The breakage is specific to the PyPI 0.8.0 wheel.)
-  Result: `colab exec` fails with an `AttributeError`. Fix in the same
-  environment the `colab` binary runs in — plain `pip install` targets the
-  wrong environment for the common install methods:
-  ```bash
-  # uv tool install (default): the CLI lives in an isolated venv that has no
-  # pip; plain `pip` does NOT touch it.
-  uv pip install --python ~/.local/share/uv/tools/google-colab-cli/bin/python \
-    "jupyter-kernel-client>=0.9,<1" "websocket-client>=1.6"
-  # pipx: pipx inject google-colab-cli "jupyter-kernel-client>=0.9,<1" "websocket-client>=1.6"
-  # plain pip / activated venv: pip install "jupyter-kernel-client>=0.9,<1" "websocket-client>=1.6"
-  ```
-  Stay below 1.x: 1.x is not uniformly compatible with the current
-  client-class lookup (`KernelClient` vs `ColabKernelClient`), so `>=0.9,<1`
-  is the conservative workaround. Upstream issue:
-  `googlecolab/google-colab-cli#137`. Note the `>=0.8` floor proposed in
-  `googlecolab/google-colab-cli#138` is insufficient: a stock PyPI 0.8.0
-  install already satisfies it while still missing the API.
-- `websocket-client>=1.0` is declared, but on 1.0 `colab ssh` loses the
-  server's 400 response body (the `resp_body` parameter on
-  `WebSocketBadStatusException` only exists since 1.6.0). Use `>=1.6` —
-  covered by the install command above.
-  Upstream issue: `googlecolab/google-colab-cli#139`.
-
-Verify after installing: `colab version`, then run the import check with the
-CLI's own interpreter (e.g.
-`~/.local/share/uv/tools/google-colab-cli/bin/python -c "from jupyter_kernel_client import JupyterSubprotocol"`)
-— it must succeed.
+The CLI bundles `colab skill` and `colab readme`, but version-sensitive
+behavior should be verified against the installed binary and exact source.
+`oauth2` remains the parser default in v0.7.4/current main.
 
 ## Mental Model
 
@@ -117,8 +83,9 @@ CLI's own interpreter (e.g.
   remote files so later `ls`, `download`, and cleanup commands are unambiguous.
 - Commands that access the Colab control plane authenticate on demand, perform
   their operation, and exit. Pure informational commands such as `version`,
-  `help`, and `readme` do not need control-plane authentication. The
-  keep-alive process is managed by the CLI after allocation.
+  `help`, and `readme` do not need control-plane authentication. Current
+  upstream runs no client-side keep-alive daemon; backend liveness depends on
+  kernel activity and Colab policy.
 
 ## Agent Rules
 
@@ -178,15 +145,14 @@ CLI's own interpreter (e.g.
   user-interactive and suggest it rather than running it blindly.
 - `--high-mem` is accepted by `colab new`, `colab run`, and `colab ssh`
   when SSH creates a runtime: `colab new -s trainer --gpu A100 --high-mem`.
-  In 0.7.2 the client sends `shape=hm` for CPU, T4, G4, H100, and A100, while
+  Current upstream sends `shape=hm` for CPU, T4, G4, H100, and A100, while
   L4 and TPU (`v5e1`, `v6e1`) omit the shape and print an ignored-flag warning
   because they are treated as single-shape accelerators. The binary help says
   high-RAM requests require "Colab Pro or Pro+ entitlement"; actual backend
-  entitlement and availability remain account-dependent. Verify the
-  backend-reported assigned shape with `colab sessions`. In 0.7.2,
-  `colab status -s <name>` renders the machine shape stored in local session
-  state, so it can reflect the requested shape rather than the backend's actual
-  assignment.
+  entitlement and availability remain account-dependent. Verify assigned shape
+  with `colab sessions`. Current upstream `colab status -s <name>` still
+  renders the locally cached requested shape rather than preferring backend
+  `machineShape`; the fork hardening branch fixes this.
 
 ## Backend Inventory And Benchmarking
 
@@ -205,9 +171,9 @@ supported selector can still return `Service Unavailable` or fall back in the
 web UI. Always inspect the actual assigned hardware with `nvidia-smi`, CPU/RAM
 checks, and task-specific benchmarks.
 
-0.7.2 does not validate accelerator selector strings strictly: an unrecognized
-`--gpu` value silently maps to A100, and an unrecognized `--tpu` value silently
-maps to v6e1. Do not rely on either fallback or predict the backend error that
+Current upstream does not validate accelerator selector strings strictly: an
+unrecognized `--gpu` value silently maps to A100, and an unrecognized `--tpu`
+value silently maps to v6e1. Do not rely on either fallback or predict the backend error that
 may follow; spell selectors exactly: GPU `T4`, `L4`, `G4`, `H100`, `A100`; TPU
 `v5e1`, `v6e1`.
 
@@ -260,13 +226,13 @@ colab --auth oauth2 sessions
 colab --auth adc sessions
 ```
 
-`oauth2` is the default in the installed CLI. On first authorization, 0.7.2
-prints an authorization URL and waits for the user to paste back Google's
+`oauth2` is the default in v0.7.4/current upstream. On first authorization,
+the CLI prints an authorization URL and waits for the user to paste back Google's
 authorization code; it does not automatically open a browser. It uses
 `~/.colab-cli-oauth-config.json` (or `-c PATH`) when present and otherwise
 falls back to its bundled OAuth client config.
 
-On stock 0.7.2, grant the full requested OAuth2 scope set. Upstream issue #116
+Grant the full requested OAuth2 scope set. Upstream issue #116
 documents a still-open granular-consent bug: accepting only a subset can make
 the initial exchange fail and can later make refresh fall back to a fresh
 consent flow.
@@ -295,9 +261,9 @@ remain registered and directly callable. `whoami` is a read-only credential
 inspection command; `auth` starts the interactive in-VM Google auth flow.
 
 For control-plane 401/403 errors, first run `colab whoami` and inspect the
-active provider and scopes. Current 0.7.2 session allocation and keep-alive use
-`colab.research.google.com`; do not use old
-`colab.pa.googleapis.com` keep-alive troubleshooting as current guidance.
+active provider and scopes. Current session allocation uses
+`colab.research.google.com`; do not use obsolete
+`colab.pa.googleapis.com` keep-alive troubleshooting.
 
 ## One-Shot Jobs
 
@@ -319,8 +285,8 @@ colab run --keep -s inspect-job script.py
 
 Default execution timeout is 30.0s; pass an explicit `--timeout` for long jobs.
 `--env KEY=VALUE` is repeatable; if the same key is supplied more than once,
-the last value wins. On stock 0.7.2, use it only for non-secret values because
-expanded environment assignments are persisted in local session history.
+the last value wins. Use it only for non-secret values on stock upstream because expanded
+environment assignments can be persisted in local session history.
 
 Use `--keep` only when you need to inspect the runtime afterward. If you use it,
 stop the session explicitly:
@@ -393,7 +359,7 @@ colab exec -s analysis --env BATCH=32 -f script.py
 
 Default execution timeout is 30.0s; pass an explicit `--timeout` for long jobs.
 `--env KEY=VALUE` is repeatable here too, with the last duplicate key winning.
-On stock 0.7.2, do not pass secrets through this flag because their values are
+Do not pass secrets through this flag on stock upstream because values can be
 written into local execution history.
 
 Pipe short code through stdin:
@@ -453,8 +419,8 @@ colab rm -s analysis /content/temp.txt
 colab edit -s analysis /content/config.py
 ```
 
-On stock 0.7.2, prefer an explicit `download -> local edit -> upload` sequence
-for valuable existing files instead of `colab edit`. The released
+On current stock upstream, prefer an explicit `download -> local edit -> upload`
+sequence for valuable existing files instead of `colab edit`. The released
 `colab edit` catches any download exception as if the remote file did not
 exist; a transient transport/auth failure can therefore open an empty temp file
 and later overwrite the remote path if the user saves changes.
@@ -506,7 +472,7 @@ log file path if exported, and confirmation that cleanup ran.
 ## Recovery
 
 - Treat `~/.config/colab-cli/history/` as sensitive. Besides executed code and
-  outputs, stock 0.7.2 records raw interactive stdin replies, which can include
+  outputs, current stock upstream records raw interactive stdin replies, which can include
   one-time auth codes or other secrets. Do not publish/export history without
   reviewing and redacting it first.
 - `Session not found`: run `colab sessions`; recreate the session if the backend
@@ -520,42 +486,25 @@ log file path if exported, and confirmation that cleanup ran.
 - Cleanup uncertainty: run `colab sessions` and stop any named sessions created
   for the current task.
 
-### Long-session hazards (0.7.2)
+### Remaining reliability hazards
 
-- **Proxy token expiry (~1 hour).** The runtime proxy token is captured at
-  session creation and never refreshed: 0.7.2 has no proxy-credential refresh
-  path (`RuntimeProxyInfo.token_expires_in_seconds` is parsed but unused, and
-  nothing updates the stored session token afterwards). After roughly an
-  hour, commands can fail with 401/404 even though the runtime is alive. Do
-  not treat this as "runtime died". Note: re-running auth only refreshes
-  control-plane credentials, NOT the runtime proxy token — so
-  "re-authenticate and retry" does not recover an expired proxy token.
-  Upstream: `googlecolab/google-colab-cli#106`.
-- **The CLI may auto-prune the local binding.** On terminal proxy errors
-  (401/404), 0.7.2 can prune the local session binding automatically even
-  while the backend assignment is still live. So "do not delete the local
-  session binding" is not fully in your hands: after a proxy 401/404, check
-  `colab sessions` — the backend endpoint may still exist and keep billing
-  even if the local name is gone.
-- **A 404 is not always "file not found".** `upload`/`download`/`ls` map any
-  404 to `FileNotFoundError`, so an expired proxy token surfaces as a bogus
-  "file or directory not found". If file operations fail after a long idle
-  period while `exec`/`console` still work, suspect token expiry first, not a
-  missing file. Upstream: `googlecolab/google-colab-cli#140`.
-- **`colab edit` data-loss risk.** If the remote download fails, 0.7.2 opens
-  the editor anyway: for a genuinely missing file that is the "start empty"
-  flow, for anything else it is data loss on save. For important remote
-  files, avoid `colab edit` on 0.7.2 — use explicit
-  `download` → inspect locally → edit → `upload`, and verify the upload
-  succeeded. ("Non-empty temp content" is not a usable check: the temp file
-  is private to the command, and a legitimate remote file can be 0 bytes.)
-- **After an assignment timeout, check before reallocating.** `colab new` can
-  time out client-side while the assignment still materializes server-side.
-  Never immediately create a second session: run `colab sessions` first. If
-  an unexpected endpoint appeared, do NOT allocate again — the orphan keeps
-  billing until unassigned, and 0.7.2 has no `adopt` command. Surface the
-  endpoint and ask how to proceed instead of silently paying for two
-  runtimes.
+- **`colab edit` data-loss risk.** Current upstream still catches any download
+  exception as if the remote file did not exist. A transport/auth/server failure
+  can therefore open an empty temp file and later overwrite an existing remote
+  path after editing. For important files, use explicit
+  `download` → inspect locally → edit → `upload`, then verify the upload.
+- **Contents 404 classification is still broad.** The Contents API wrapper maps
+  every HTTP 404 to `FileNotFoundError`. Automatic proxy-token refresh in 0.7.4
+  removes the old scheduled-expiry failure mode, but a tunnel/proxy/server 404
+  can still be presented as a missing path.
+- **After an assignment timeout, reconcile before reallocating.** A
+  `colab new` POST can time out client-side after the backend committed the
+  assignment. Run `colab sessions` before creating another runtime. If an
+  unexpected endpoint appeared, do not allocate again until it is reconciled or
+  unassigned; otherwise both assignments can consume compute.
+- **Status shape can be stale.** `colab sessions` shows backend
+  `machineShape`, while current upstream `colab status` can show locally
+  requested shape. Prefer `sessions` when confirming actual assignment shape.
 
 ## Fast Command Reference
 
