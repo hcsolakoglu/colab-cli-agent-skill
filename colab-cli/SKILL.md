@@ -154,6 +154,53 @@ behavior should be verified against the installed binary and exact source.
   renders the locally cached requested shape rather than preferring backend
   `machineShape`; the fork hardening branch fixes this.
 
+## Long-Running Unattended Jobs (Agent Best Practice)
+
+Field lessons from multi-hour, multi-session GPU benchmark campaigns. Each rule
+exists because skipping it cost a session setup or a silent stall.
+
+- **Smoke before the long run, in the same session.** Make the job script run
+  a tiny end-to-end pass first (one input, one repeat, every output-writing
+  step, including result packaging) and exit non-zero before the long part if
+  it fails. Setup (venv, model download) is shared, so the check is nearly
+  free. `bash -n` and local unit tests do not catch runtime-only failures.
+- **Assume nothing about the image.** Probe tools you call (`command -v`)
+  in the smoke step. Colab has no GNU `/usr/bin/time`; time with bash
+  `$SECONDS` or Python. Application safety guards (for example a
+  "refusing full run without approval" flag) also fire at runtime: pass the
+  intended subset flag explicitly, never disable the guard.
+- **Detach, mark completion, poll the marker.** Launch with `setsid nohup bash
+  job.sh` from a tiny `colab exec` script, redirect all output to a log file,
+  and write the exit code with `trap 'echo "exit=$?" > $OUT/done' EXIT`.
+  Poll for `$OUT/done` at most once a minute; never hold a `colab exec` open
+  for the job's whole duration.
+- **Bound every poll.** A `colab exec` call can hang for tens of minutes. Wrap
+  pollers in `timeout 120 colab exec ...` (or kill the stuck call by PID) so
+  one hung call cannot stall collection of the other sessions.
+- **Collect, verify, then stop.** When the marker appears, tar the output
+  directory remotely (exclude large media), download one archive, check it
+  exists locally, then `colab stop` immediately so no GPU idles.
+- **Upload size.** Large single uploads fail with `400 Bad Request` (seen at
+  about 120 MB). Split into parts of about 40 MB (`split -b 40M`), upload
+  them, and `cat` them back together inside the job before verifying hashes.
+- **Concurrency.** GPU allocations beyond the account's concurrent limit fail
+  with `Allocation refused (precondition failed)` (three G4 sessions were the
+  limit in one account; CPU runtimes did not count). Queue the extra job and
+  backfill it when a collector frees a slot, instead of retrying in a loop.
+- **Parallel only where it is valid.** Independent correctness runs can use
+  separate sessions of the same accelerator type; A/B timing belongs in one
+  session with interleaved arms, because separate VMs add hardware noise.
+- **Hermetic Python on Colab.** Preinstalled local-version wheels (for example
+  `torchaudio 2.11.0+cu128`) break `--require-hashes` installs and leftover
+  packages (for example `torchvision`) break imports; install locked
+  dependencies into a fresh `uv venv`. The kernel exports
+  `MPLBACKEND=module://matplotlib_inline...`, which a fresh venv lacks: set
+  `MPLBACKEND=Agg`. `COLAB_LANGUAGE_SERVER_PROXY` looks like a proxy to
+  urllib (NLTK 3.10 refuses downloads): unset it for that one command
+  instead of disabling the library's guard.
+- **Kill by PID, not pattern, locally.** `pkill -f <pattern>` can match the
+  agent's own shell command line and kill it.
+
 ## Backend Inventory And Benchmarking
 
 The installed CLI advertises these accelerator selectors:
