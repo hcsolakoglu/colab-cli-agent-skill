@@ -164,6 +164,13 @@ exists because skipping it cost a session setup or a silent stall.
   step, including result packaging) and exit non-zero before the long part if
   it fails. Setup (venv, model download) is shared, so the check is nearly
   free. `bash -n` and local unit tests do not catch runtime-only failures.
+- **Smoke every mode, not a sample.** If the long part runs a tool in several
+  modes or with extra flags (`fuzz` then `pipeline`, `--evaluate-x`), each
+  one needs its own smoke twin with the same subcommand and flags; only size
+  flags (cases, repeats, limit, output paths) may differ. A mode that was never
+  smoked can still hit a gate or import path the smoked one skips. Enforce it
+  mechanically (a small lint over job scripts run in CI and before launch)
+  rather than by memory; context resets and compaction forget checklists.
 - **Assume nothing about the image.** Probe tools you call (`command -v`)
   in the smoke step. Colab has no GNU `/usr/bin/time`; time with bash
   `$SECONDS` or Python. Application safety guards (for example a
