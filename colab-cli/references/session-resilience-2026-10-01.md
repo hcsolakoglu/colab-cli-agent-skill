@@ -30,15 +30,16 @@ endpoint is absent from that one listing, with no retry. If that listing ever
 misses a live assignment (inferred, not reproduced), the name can be lost while
 the VM stays billable.
 
-Fixed on `all-fixes/persistent-drive-2026-10-01` by commit `acaa9b7`
-(`0.7.5.dev12+gacaa9b779` when rebuilt): a missing endpoint is re-queried once
-after 2 seconds, then preserved in a private stale-session store rather than
-destroyed. A later listing automatically re-adopts it with fresh proxy info;
-three consecutive confirmed misses finally drop the stale record, and
-`colab stop -s NAME` can release a preserved stale endpoint. Older installed
-binaries and jobs already running under them should keep the external
-session-guard/watchdog until those jobs finish; do not reinstall underneath a
-valuable live session merely to obtain this fix.
+Fixed on `all-fixes/persistent-drive-2026-10-01`: core recovery landed in
+`acaa9b7`, and `c7512ab` (`0.7.5.dev13+gc7512abed`) also clears an older stale
+record when the same session name is deliberately reallocated. A missing
+endpoint is re-queried once after 2 seconds, then preserved in a private
+stale-session store rather than destroyed. A later listing automatically
+re-adopts it with fresh proxy info; three consecutive confirmed misses finally
+drop the stale record, and `colab stop -s NAME` can release a preserved stale
+endpoint. Older installed binaries and jobs already running under them should
+keep the external session-guard/watchdog until those jobs finish; do not
+reinstall underneath a valuable live session merely to obtain this fix.
 
 ### Safe recovery pattern
 

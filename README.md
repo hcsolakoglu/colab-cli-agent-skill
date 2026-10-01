@@ -20,7 +20,7 @@ refresh. Current upstream `main` additionally raises the `websocket-client`
 floor to `>=1.6`; an exact 0.7.4 environment may still need that dependency
 upgrade for complete `colab ssh` HTTP-error diagnostics.
 
-Stock-upstream caveats remain documented, but the unified fork branch fixes the local security/history hardening, safe `colab edit`, proxy 401/404 classification, assignment-timeout reconciliation, backend machine-shape reporting, strict accelerator validation, granular OAuth consent handling, persistent DriveFS, and from `acaa9b7` conservative orphan-session recovery with a stale-session store and endpoint stop fallback. The skill includes dated Drive quota/cost and live-session resilience references, including guidance for older live jobs that must retain their existing external guard until a safe restart boundary.
+Stock-upstream caveats remain documented, but the unified fork branch fixes the local security/history hardening, safe `colab edit`, proxy 401/404 classification, assignment-timeout reconciliation, backend machine-shape reporting, strict accelerator validation, granular OAuth consent handling, persistent DriveFS, and in `c7512ab` conservative orphan-session recovery with retry, stale-session storage, automatic re-adoption, endpoint stop fallback, and same-name stale cleanup. The skill includes dated Drive quota/cost and live-session resilience references, including guidance for older live jobs that must retain their existing external guard until a safe restart boundary.
 
 ## Install the skill globally
 

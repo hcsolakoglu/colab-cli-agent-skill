@@ -543,7 +543,7 @@ log file path if exported, and confirmation that cleanup ran.
 
 ### Stock upstream vs unified fork
 
-Stock upstream still has the `colab edit` broad-download exception risk, broad Contents 404 classification, ambiguous assignment POST timeout handling, locally cached `status` machine shape, and destructive local pruning after a single missing-assignment listing. The unified fork fixes these: safe `edit`, proxy 401/404 classification, bounded assignment reconciliation, backend `machineShape`, and from `acaa9b7` (`0.7.5.dev12+gacaa9b779`) a retry + private stale-session store + automatic re-adoption + stale endpoint stop fallback. Keep `colab sessions` as the final server-side resource source of truth. Do not reinstall an older live job mid-run just to gain the new recovery logic; retain its existing external guard until a safe stop/checkpoint boundary.
+Stock upstream still has the `colab edit` broad-download exception risk, broad Contents 404 classification, ambiguous assignment POST timeout handling, locally cached `status` machine shape, and destructive local pruning after a single missing-assignment listing. The unified fork fixes these: safe `edit`, proxy 401/404 classification, bounded assignment reconciliation, backend `machineShape`, and in `c7512ab` (`0.7.5.dev13+gc7512abed`) retry + private stale-session storage + automatic re-adoption + stale endpoint stop fallback + same-name stale cleanup. Keep `colab sessions` as the final server-side resource source of truth. Do not reinstall an older live job mid-run just to gain the new recovery logic; retain its existing external guard until a safe stop/checkpoint boundary.
 
 ## Fast Command Reference
 
