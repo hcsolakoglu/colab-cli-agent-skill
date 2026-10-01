@@ -24,12 +24,21 @@ Treat these together as an orphaned-session signal:
 Do not allocate a replacement or assume cleanup succeeded until server-side
 assignments are reconciled.
 
-Mechanism seen in the fork's session lookup (`common.py`, e179094): when a
-cached runtime token is near expiry, the CLI lists assignments and prunes the
-local record if its endpoint is absent from that one listing, with no retry.
-If that listing ever misses a live assignment (inferred, not reproduced), the
-name is lost while the VM stays billable. Check for orphans after long idle
-gaps and token refreshes, not only after upgrades.
+Mechanism seen in fork builds through `e179094`: when a cached runtime token
+is near expiry, the CLI lists assignments and prunes the local record if its
+endpoint is absent from that one listing, with no retry. If that listing ever
+misses a live assignment (inferred, not reproduced), the name can be lost while
+the VM stays billable.
+
+Fixed on `all-fixes/persistent-drive-2026-10-01` by commit `acaa9b7`
+(`0.7.5.dev12+gacaa9b779` when rebuilt): a missing endpoint is re-queried once
+after 2 seconds, then preserved in a private stale-session store rather than
+destroyed. A later listing automatically re-adopts it with fresh proxy info;
+three consecutive confirmed misses finally drop the stale record, and
+`colab stop -s NAME` can release a preserved stale endpoint. Older installed
+binaries and jobs already running under them should keep the external
+session-guard/watchdog until those jobs finish; do not reinstall underneath a
+valuable live session merely to obtain this fix.
 
 ### Safe recovery pattern
 

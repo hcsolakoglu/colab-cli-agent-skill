@@ -20,7 +20,7 @@ refresh. Current upstream `main` additionally raises the `websocket-client`
 floor to `>=1.6`; an exact 0.7.4 environment may still need that dependency
 upgrade for complete `colab ssh` HTTP-error diagnostics.
 
-Stock-upstream caveats remain documented, but the unified fork branch fixes the local security/history hardening, safe `colab edit`, proxy 401/404 classification, assignment-timeout reconciliation, backend machine-shape reporting, strict accelerator validation, granular OAuth consent handling, and adds persistent DriveFS with one-time OAuth login. The Desktop OAuth client can be installed once into a private local config file, so later shells do not need repeated client configuration; browserless shells fall back to a printed loopback authorization URL. The skill also includes dated references for Drive API quota/cost guidance and for live-session resilience: orphan recovery after local session-state loss, safe auth backups, spend-watchdog design, and legacy rclone mount pitfalls.
+Stock-upstream caveats remain documented, but the unified fork branch fixes the local security/history hardening, safe `colab edit`, proxy 401/404 classification, assignment-timeout reconciliation, backend machine-shape reporting, strict accelerator validation, granular OAuth consent handling, persistent DriveFS, and from `acaa9b7` conservative orphan-session recovery with a stale-session store and endpoint stop fallback. The skill includes dated Drive quota/cost and live-session resilience references, including guidance for older live jobs that must retain their existing external guard until a safe restart boundary.
 
 ## Install the skill globally
 
