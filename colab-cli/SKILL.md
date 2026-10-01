@@ -479,15 +479,16 @@ colab install -s analysis -r requirements.txt
 On the unified fork, prefer persistent DriveFS for repeat/agent workflows:
 
 ```bash
-export COLAB_DRIVEFS_CLIENT_ID='...apps.googleusercontent.com'
-export COLAB_DRIVEFS_CLIENT_SECRET='...'
-colab drive-mount login              # one-time user browser approval
+# One-time user-owned authorization and private Desktop-client installation.
+colab drive-mount login --client-config /path/to/client_secret.json
+
+# Every later runtime can mount without repeating browser consent.
 colab new -s analysis
-colab drive-mount -s analysis        # no per-runtime browser approval
+colab drive-mount -s analysis
 colab drive-mount status
 ```
 
-The refresh token is stored at `~/.config/colab-cli/drive-mount-auth.json` with user-only permissions; the client secret stays in the environment. `colab drivemount -s analysis` automatically uses this persistent path when configured, otherwise it falls back to stock interactive behavior. Use `colab drive-mount logout` to revoke/remove the persistent grant. Stock upstream issue #113 still affects the legacy interactive path, so verify mounts before depending on them.
+The fork stores the Desktop OAuth client at `~/.config/colab-cli/drive-mount-client.json` and the refresh grant at `drive-mount-auth.json`, both with user-only permissions. Per-shell OAuth environment configuration is optional rather than required. If a desktop browser cannot be discovered, login prints a loopback URL instead of failing; open it on the same machine because its callback is localhost. `colab drivemount -s analysis` automatically uses the persistent path when configured, otherwise it falls back to stock interactive behavior. Use `colab drive-mount logout` to revoke/remove the refresh grant. Stock upstream issue #113 still affects the legacy interactive path, so verify mounts before depending on it.
 
 ## Logs And Reporting
 
