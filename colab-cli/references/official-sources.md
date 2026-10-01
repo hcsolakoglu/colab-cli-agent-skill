@@ -10,6 +10,10 @@ Use these primary sources when behavior may have changed:
   `https://github.com/googlecolab/google-colab-cli/blob/main/skills/colab-operator/SKILL.md`
 - Google Colab FAQ for resource limits, runtime duration, and paid-plan caveats:
   `https://research.google.com/colaboratory/faq.html`
+- Google Drive API usage limits, quotas, transfer limits, and pricing notes:
+  `https://developers.google.com/workspace/drive/api/guides/limits`
+- Google Workspace standardized model for agent tools/APIs and later-2026 billing rollout:
+  `https://developers.google.com/workspace/tools-safety`
 - PyPI release history for `google-colab-cli` (watch for new versions):
   `https://pypi.org/project/google-colab-cli/#history`
 

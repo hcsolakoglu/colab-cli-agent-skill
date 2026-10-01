@@ -490,6 +490,10 @@ colab drive-mount status
 
 The fork stores the Desktop OAuth client at `~/.config/colab-cli/drive-mount-client.json` and the refresh grant at `drive-mount-auth.json`, both with user-only permissions. Per-shell OAuth environment configuration is optional rather than required. If a desktop browser cannot be discovered, login prints a loopback URL instead of failing; open it on the same machine because its callback is localhost. `colab drivemount -s analysis` automatically uses the persistent path when configured, otherwise it falls back to stock interactive behavior. Use `colab drive-mount logout` to revoke/remove the refresh grant. Stock upstream issue #113 still affects the legacy interactive path, so verify mounts before depending on it.
 
+### Drive API quota and transfer guidance
+
+For large Drive-backed Colab jobs, read `references/drive-api-limits-2026-10-01.md` before estimating transfer safety or cost. For projects on Google's standardized 2026 Drive API quotas, remember the headline limits: **1 TB/day project egress**, **750 GB/day Workspace upload+copy**, **1,000,000 quota units/min/project**, **325,000/min/user/project**, and a **400,000,000 quota-unit/day no-additional-charge threshold**. Drive -> Colab is the egress direction; Colab -> Drive is upload/ingress. Treat exact DriveFS byte accounting as unverified unless the project's Cloud quota telemetry confirms it, because Google's public quota page does not explicitly document one-for-one DriveFS accounting. Grandfathered projects can retain older quotas.
+
 ## Logs And Reporting
 
 Inspect and save execution history:
