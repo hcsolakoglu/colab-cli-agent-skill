@@ -3,7 +3,7 @@
 Portable agent skill for using the Google Colab CLI to provision Colab CPU,
 GPU, and TPU runtimes from a terminal agent.
 
-Skill guidance revalidated on 2026-09-29 against `google-colab-cli==0.7.4` and current upstream `main`. Re-verify command surface with `colab --help` after upgrading the CLI.
+Skill guidance revalidated on 2026-10-01 against `google-colab-cli==0.7.4`, current upstream `main`, and `hcsolakoglu/google-colab-cli` branch `all-fixes/persistent-drive-2026-10-01`. Re-verify command surface with `colab --help` after upgrading the CLI.
 
 ## Install the CLI
 
@@ -20,10 +20,7 @@ refresh. Current upstream `main` additionally raises the `websocket-client`
 floor to `>=1.6`; an exact 0.7.4 environment may still need that dependency
 upgrade for complete `colab ssh` HTTP-error diagnostics.
 
-The skill retains only caveats still present in current upstream, including
-local secret/history exposure, broad `colab edit` download-error handling,
-assignment timeout reconciliation, stale `status` machine-shape reporting,
-and invalid accelerator strings silently mapping to fallback accelerators.
+Stock-upstream caveats remain documented, but the unified fork branch fixes the local security/history hardening, safe `colab edit`, proxy 401/404 classification, assignment-timeout reconciliation, backend machine-shape reporting, strict accelerator validation, granular OAuth consent handling, and adds persistent DriveFS with one-time OAuth login.
 
 ## Install the skill globally
 

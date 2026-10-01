@@ -26,8 +26,7 @@ uv tool install google-colab-cli
 
 ### Current release and remaining hardening caveats
 
-Guidance was revalidated on 2026-09-29 against upstream `main` after
-`google-colab-cli==0.7.4`.
+Guidance was revalidated on 2026-10-01 against upstream `main` and the user fork branch `all-fixes/persistent-drive-2026-10-01`. That branch is based on current upstream `a84e094` and adds the remaining hardening plus persistent DriveFS. If `colab drive-mount --help` succeeds, prefer the fork workflow below and do not apply stock-only caveats as if they were unfixed.
 
 Upgrade old 0.7.2 installs before troubleshooting their known dependency and
 runtime-token failures:
@@ -106,9 +105,7 @@ behavior should be verified against the installed binary and exact source.
 - Never start unpiped `colab repl` or `colab console` from a non-interactive
   agent shell. They are TTY-oriented. Use `colab exec`, `colab run`, or pipe
   stdin into the interactive command.
-- Treat unpiped `colab repl`, unpiped `colab console`, `colab auth`, and
-  `colab drivemount` as user-interactive. Piped `repl`/`console` can be used
-  non-interactively; `auth`/`drivemount` generally need a human at a terminal.
+- Treat unpiped `colab repl`, unpiped `colab console`, `colab auth`, and stock interactive `colab drivemount` as user-interactive. On the unified fork, `colab drive-mount login` needs the user once; subsequent `colab drive-mount -s NAME` and `colab drivemount -s NAME` are agent-runnable when persistent credentials are configured.
 - Do not edit `~/.config/colab-cli/sessions.json` by hand. Use CLI commands.
 - For live probes, remember that `colab new` and `colab run` can allocate real
   compute units. Clean up even after failed jobs.
@@ -225,11 +222,7 @@ supported selector can still return `Service Unavailable` or fall back in the
 web UI. Always inspect the actual assigned hardware with `nvidia-smi`, CPU/RAM
 checks, and task-specific benchmarks.
 
-Current upstream does not validate accelerator selector strings strictly: an
-unrecognized `--gpu` value silently maps to A100, and an unrecognized `--tpu`
-value silently maps to v6e1. Do not rely on either fallback or predict the backend error that
-may follow; spell selectors exactly: GPU `T4`, `L4`, `G4`, `H100`, `A100`; TPU
-`v5e1`, `v6e1`.
+Stock upstream does not validate accelerator selector strings strictly: an unrecognized `--gpu` value silently maps to A100 and an unrecognized `--tpu` value to v6e1. The unified fork rejects invalid selectors and simultaneous `--gpu` + `--tpu` before allocation. In either case, spell selectors exactly: GPU `T4`, `L4`, `G4`, `H100`, `A100`; TPU `v5e1`, `v6e1`.
 
 For a compact VPS-style profile, run the bundled benchmark script:
 
@@ -286,10 +279,7 @@ authorization code; it does not automatically open a browser. It uses
 `~/.colab-cli-oauth-config.json` (or `-c PATH`) when present and otherwise
 falls back to its bundled OAuth client config.
 
-Grant the full requested OAuth2 scope set. Upstream issue #116
-documents a still-open granular-consent bug: accepting only a subset can make
-the initial exchange fail and can later make refresh fall back to a fresh
-consent flow.
+On stock upstream, issue #116 remains a granular-consent bug: a partial grant can break initial login or later refresh. The unified fork fixes this by persisting granted scopes, restoring them without re-expanding the request, relaxing only the token exchange, and requiring only control-plane scopes.
 
 `adc` uses Google Application Default Credentials and is usually better for
 headless agent workflows once configured. If ADC user credentials fail with scope
@@ -486,21 +476,18 @@ colab install -s analysis numpy pandas
 colab install -s analysis -r requirements.txt
 ```
 
-Mount Drive or authenticate the VM only when the task requires it:
+On the unified fork, prefer persistent DriveFS for repeat/agent workflows:
 
 ```bash
-colab drivemount -s analysis
-colab auth -s analysis
+export COLAB_DRIVEFS_CLIENT_ID='...apps.googleusercontent.com'
+export COLAB_DRIVEFS_CLIENT_SECRET='...'
+colab drive-mount login              # one-time user browser approval
+colab new -s analysis
+colab drive-mount -s analysis        # no per-runtime browser approval
+colab drive-mount status
 ```
 
-These commands can prompt the user, so do not run them blindly in a
-non-interactive agent environment.
-
-`colab drivemount` also has an unresolved CLI-only failure mode tracked
-upstream as issue #113: browser authorization can succeed while the remote
-`drive.mount()` still reaches its internal ~120s timeout. Do not treat browser
-consent success alone as proof that Drive mounted; verify the mount remotely
-before depending on it.
+The refresh token is stored at `~/.config/colab-cli/drive-mount-auth.json` with user-only permissions; the client secret stays in the environment. `colab drivemount -s analysis` automatically uses this persistent path when configured, otherwise it falls back to stock interactive behavior. Use `colab drive-mount logout` to revoke/remove the persistent grant. Stock upstream issue #113 still affects the legacy interactive path, so verify mounts before depending on them.
 
 ## Logs And Reporting
 
@@ -540,25 +527,9 @@ log file path if exported, and confirmation that cleanup ran.
 - Cleanup uncertainty: run `colab sessions` and stop any named sessions created
   for the current task.
 
-### Remaining reliability hazards
+### Stock upstream vs unified fork
 
-- **`colab edit` data-loss risk.** Current upstream still catches any download
-  exception as if the remote file did not exist. A transport/auth/server failure
-  can therefore open an empty temp file and later overwrite an existing remote
-  path after editing. For important files, use explicit
-  `download` → inspect locally → edit → `upload`, then verify the upload.
-- **Contents 404 classification is still broad.** The Contents API wrapper maps
-  every HTTP 404 to `FileNotFoundError`. Automatic proxy-token refresh in 0.7.4
-  removes the old scheduled-expiry failure mode, but a tunnel/proxy/server 404
-  can still be presented as a missing path.
-- **After an assignment timeout, reconcile before reallocating.** A
-  `colab new` POST can time out client-side after the backend committed the
-  assignment. Run `colab sessions` before creating another runtime. If an
-  unexpected endpoint appeared, do not allocate again until it is reconciled or
-  unassigned; otherwise both assignments can consume compute.
-- **Status shape can be stale.** `colab sessions` shows backend
-  `machineShape`, while current upstream `colab status` can show locally
-  requested shape. Prefer `sessions` when confirming actual assignment shape.
+Stock upstream still has the `colab edit` broad-download exception risk, broad Contents 404 classification, ambiguous assignment POST timeout handling, and locally cached `status` machine shape. The unified fork branch fixes all four: `edit` swallows only genuine missing-file errors, empty proxy 401/404 gets a distinct error, assignment timeout uses bounded GET reconciliation without a second POST, and `status` prefers backend `machineShape`. Keep `colab sessions` as the final resource/cleanup source of truth.
 
 ## Fast Command Reference
 
