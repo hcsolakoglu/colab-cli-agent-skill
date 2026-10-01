@@ -24,6 +24,13 @@ Treat these together as an orphaned-session signal:
 Do not allocate a replacement or assume cleanup succeeded until server-side
 assignments are reconciled.
 
+Mechanism seen in the fork's session lookup (`common.py`, e179094): when a
+cached runtime token is near expiry, the CLI lists assignments and prunes the
+local record if its endpoint is absent from that one listing, with no retry.
+If that listing ever misses a live assignment (inferred, not reproduced), the
+name is lost while the VM stays billable. Check for orphans after long idle
+gaps and token refreshes, not only after upgrades.
+
 ### Safe recovery pattern
 
 Before risky CLI work or immediately after `colab new`, record a private

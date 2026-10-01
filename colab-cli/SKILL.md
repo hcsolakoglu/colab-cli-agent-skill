@@ -169,6 +169,15 @@ exists because skipping it cost a session setup or a silent stall.
   smoked can still hit a gate or import path the smoked one skips. Enforce it
   mechanically (a small lint over job scripts run in CI and before launch)
   rather than by memory; context resets and compaction forget checklists.
+- **Admit each paid job against the whole plan.** Before every allocation, read
+  `colab usage` fresh and start the job only if balance minus account floor,
+  safety guard, and the caps still reserved for later mandatory jobs covers this
+  job's cap. A per-job cap alone lets early jobs eat budget later gates need.
+- **Ship an exact code snapshot and pin the runtime.** Upload one `git bundle`
+  (not a working-tree tar), clone it remotely, and log the commit; record
+  `/proc/sys/kernel/random/boot_id` at job start and compare it when
+  collecting, so outputs from a restarted or replaced VM (empty `/content`,
+  stale markers) are detected instead of trusted.
 - **Assume nothing about the image.** Probe tools you call (`command -v`)
   in the smoke step. Colab has no GNU `/usr/bin/time`; time with bash
   `$SECONDS` or Python. Application safety guards (for example a
