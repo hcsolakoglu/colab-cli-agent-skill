@@ -106,7 +106,8 @@ behavior should be verified against the installed binary and exact source.
   agent shell. They are TTY-oriented. Use `colab exec`, `colab run`, or pipe
   stdin into the interactive command.
 - Treat unpiped `colab repl`, unpiped `colab console`, `colab auth`, and stock interactive `colab drivemount` as user-interactive. On the unified fork, `colab drive-mount login` needs the user once; subsequent `colab drive-mount -s NAME` and `colab drivemount -s NAME` are agent-runnable when persistent credentials are configured.
-- Do not edit `~/.config/colab-cli/sessions.json` by hand. Use CLI commands.
+- Do not edit `~/.config/colab-cli/sessions.json` by hand. Use CLI commands. A missing local name does **not** prove its VM stopped: before reallocating after `Session not found`, reconcile server-side assignments with `colab sessions`; an orphan can remain allocated and billable.
+- Do not upgrade/reinstall/switch Colab CLI or change Drive transport underneath a valuable live job. Prefer checkpoint -> collect -> stop/verify -> upgrade -> new session. If unavoidable, preserve a private name-to-endpoint recovery record first. See `references/session-resilience-2026-10-01.md`.
 - For live probes, remember that `colab new` and `colab run` can allocate real
   compute units. Clean up even after failed jobs.
 - For parallel agents or risky probes, isolate session state with
@@ -521,16 +522,15 @@ log file path if exported, and confirmation that cleanup ran.
   outputs, current stock upstream records raw interactive stdin replies, which can include
   one-time auth codes or other secrets. Do not publish/export history without
   reviewing and redacting it first.
-- `Session not found`: run `colab sessions`; recreate the session if the backend
-  pruned it.
+- `Session not found`: run `colab sessions` **before** recreating anything. If the backend assignment is gone, recreate as needed. If an unnamed/`[?]` assignment or the recorded endpoint is still live, treat it as an orphaned local record and recover/stop that assignment instead of allocating a duplicate. See `references/session-resilience-2026-10-01.md`.
 - Kernel stuck or timeout: run `colab restart-kernel -s <name>` once, then retry.
   If still stuck, stop and recreate the session.
 - Unexpected stale behavior: check `which colab` and `colab version`.
 - Auth failure: inspect whether the command used `oauth2` or `adc`, then run
   `colab whoami`; do not use `colab auth` to fix control-plane credential
   problems.
-- Cleanup uncertainty: run `colab sessions` and stop any named sessions created
-  for the current task.
+- Cleanup uncertainty: run `colab sessions` and reconcile **all** assignments created for the current task, including unnamed/orphaned endpoints; do not treat named-session disappearance as successful cleanup.
+- For paid long jobs, use a detached spend watchdog with CU cap, account floor, wall deadline, bounded usage probes, and stop fallback. Parse numeric CLI output under `LC_ALL=C`; locale decimal commas can silently break awk/printf comparisons. Kill watchdog/helper processes by recorded PID, not broad patterns. Detailed field-tested design: `references/session-resilience-2026-10-01.md`.
 
 ### Stock upstream vs unified fork
 
